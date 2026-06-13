@@ -17,10 +17,22 @@ export default function NuevaConsulta() {
     tramite: '', tramite_nuevo: '', prioridad: '', firma: '',
     como_conocio: '', observaciones: ''
   })
+  const [archivos, setArchivos] = useState<File[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+
+  function agregarArchivos(e: React.ChangeEvent<HTMLInputElement>) {
+    if (e.target.files) {
+      const nuevos = Array.from(e.target.files)
+      setArchivos(prev => [...prev, ...nuevos])
+    }
+  }
+
+  function quitarArchivo(idx: number) {
+    setArchivos(prev => prev.filter((_, i) => i !== idx))
+  }
 
   async function guardar() {
     if (!form.nombre || !form.celular || !form.domicilio || !form.municipio || !form.tramite) {
@@ -30,7 +42,8 @@ export default function NuevaConsulta() {
     setSaving(true)
     const municipio = form.municipio === 'nuevo' ? form.municipio_nuevo : form.municipio
     const tramite = form.tramite === 'nuevo' ? form.tramite_nuevo : form.tramite
-    const { error: err } = await supabase.from('consultas').insert({
+
+    const { data: consulta, error: err } = await supabase.from('consultas').insert({
       nombre: form.nombre,
       celular: form.celular,
       domicilio: form.domicilio,
@@ -42,9 +55,27 @@ export default function NuevaConsulta() {
       observaciones: form.observaciones,
       estado: 'pendiente_validacion',
       created_at: new Date().toISOString()
-    })
+    }).select().single()
+
+    if (err) { setError(err.message); setSaving(false); return }
+
+    const urls: string[] = []
+    for (const archivo of archivos) {
+      const nombre = `${consulta.id}/${Date.now()}-${archivo.name}`
+      const { error: uploadErr } = await supabase.storage
+        .from('consultas-archivos')
+        .upload(nombre, archivo)
+      if (!uploadErr) {
+        const { data: urlData } = supabase.storage.from('consultas-archivos').getPublicUrl(nombre)
+        urls.push(urlData.publicUrl)
+      }
+    }
+
+    if (urls.length > 0) {
+      await supabase.from('consultas').update({ archivos: urls }).eq('id', consulta.id)
+    }
+
     setSaving(false)
-    if (err) { setError(err.message); return }
     router.push('/consultas')
   }
 
@@ -139,6 +170,31 @@ export default function NuevaConsulta() {
         <div>
           <Label text="Observaciones" />
           <textarea value={form.observaciones} onChange={e => set('observaciones', e.target.value)} placeholder="Info que mandó el cliente, notas iniciales..." style={{ minHeight: 72, resize: 'vertical' }} />
+        </div>
+
+        <div style={{ background: DARK2, borderRadius: 14, border: `1.5px solid ${BORDER}`, padding: 14 }}>
+          <p style={{ fontSize: 12, fontWeight: 600, margin: '0 0 10px', color: 'rgba(255,255,255,0.6)' }}>📎 Archivos adjuntos</p>
+          <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: '0 0 10px' }}>Fotos, PDF, AutoCAD — lo que mandó el cliente</p>
+
+          <label style={{
+            display: 'block', padding: '10px 14px', borderRadius: 10,
+            border: `1.5px dashed rgba(45,212,176,0.3)`, cursor: 'pointer',
+            textAlign: 'center' as const, color: TEAL, fontSize: 13, marginBottom: 10
+          }}>
+            + Seleccionar archivos
+            <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.dwg,.dxf,.doc,.docx" onChange={agregarArchivos} style={{ display: 'none' }} />
+          </label>
+
+          {archivos.length > 0 && (
+            <div style={{ display: 'grid', gap: 6 }}>
+              {archivos.map((f, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '6px 10px' }}>
+                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>📄 {f.name}</span>
+                  <button onClick={() => quitarArchivo(i)} style={{ fontSize: 12, color: '#f87171', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕</button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {error && <p style={{ fontSize: 12, color: '#f87171', textAlign: 'center' }}>{error}</p>}
