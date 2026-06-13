@@ -57,6 +57,7 @@ type Movimiento = {
   nota: string
   pelota: string
   registrado_por: string
+  link: string
 }
 
 export default function TramiteDetalle() {
@@ -69,6 +70,7 @@ export default function TramiteDetalle() {
   const [nuevoEstado, setNuevoEstado] = useState('')
   const [nuevaNota, setNuevaNota] = useState('')
   const [nuevaPelota, setNuevaPelota] = useState('')
+  const [nuevoLink, setNuevoLink] = useState('')
   const [editN, setEditN] = useState({ parcelaria: '', expediente: '', dibujante: '' })
   const [saving, setSaving] = useState(false)
 
@@ -96,13 +98,14 @@ export default function TramiteDetalle() {
     const estado = nuevoEstado || tramite?.estado_actual || ''
     await supabase.from('movimientos').insert({
       tramite_id: id, estado, nota: nuevaNota,
-      pelota: nuevaPelota, registrado_por: 'silvina'
+      pelota: nuevaPelota, registrado_por: 'silvina',
+      link: nuevoLink
     })
     await supabase.from('tramites').update({
       estado_actual: estado, pelota: nuevaPelota,
       ultima_nota: nuevaNota, ultima_accion_at: new Date().toISOString(),
     }).eq('id', id)
-    setNuevaNota(''); setNuevoEstado('')
+    setNuevaNota(''); setNuevoEstado(''); setNuevoLink('')
     setSaving(false)
     loadTramite(); loadMovimientos()
   }
@@ -210,7 +213,11 @@ export default function TramiteDetalle() {
           </div>
           <div>
             <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Nota</label>
-            <textarea value={nuevaNota} onChange={e => setNuevaNota(e.target.value)} placeholder="Ej: visadora dijo que lo manda el lunes..." style={{ minHeight: 56, resize: 'vertical' }} />
+            <textarea value={nuevaNota} onChange={e => setNuevaNota(e.target.value)} placeholder="Ej: Catastro mandó correcciones del plano..." style={{ minHeight: 56, resize: 'vertical' }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>🔗 Link Dropbox / Drive (opcional)</label>
+            <input value={nuevoLink} onChange={e => setNuevoLink(e.target.value)} placeholder="https://www.dropbox.com/..." />
           </div>
           <div>
             <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 6 }}>Pelota</label>
@@ -250,7 +257,14 @@ export default function TramiteDetalle() {
                 <span style={{ fontSize: 11, fontWeight: 600, color: TEAL }}>{ESTADOS.find(e => e.key === m.estado)?.label || m.estado?.replace(/_/g, ' ')}</span>
                 <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>{new Date(m.created_at).toLocaleDateString('es-AR')}</span>
               </div>
-              {m.nota && <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', margin: '0 0 4px' }}>{m.nota}</p>}
+              {m.nota && <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', margin: '0 0 6px' }}>{m.nota}</p>}
+              {m.link && (
+                <a href={m.link} target="_blank" rel="noreferrer" style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  fontSize: 11, color: TEAL, textDecoration: 'none',
+                  background: 'rgba(45,212,176,0.1)', padding: '4px 10px', borderRadius: 20, marginBottom: 6
+                }}>🔗 Ver archivo</a>
+              )}
               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                 <div style={{ width: 6, height: 6, borderRadius: '50%', background: pelotaColor(m.pelota) }} />
                 <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>{pelotaLabel(m.pelota)}</span>
