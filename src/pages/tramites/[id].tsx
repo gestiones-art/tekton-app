@@ -28,7 +28,7 @@ const ESTADOS = [
   { key: 'en_pausa', label: '⏸️ En pausa' },
 ]
 
-const PELOTA_OPS = ['silvina', 'fer', 'dibujante', 'cliente', 'municipio']
+const RESPONSABLE_OPS = ['admin', 'tecnica', 'dibujante', 'cliente', 'municipio']
 const DIBUJANTES = ['Mario', 'Meli', 'Caro', 'Mili', 'Maria']
 
 type Tramite = {
@@ -48,6 +48,8 @@ type Tramite = {
   pelota: string
   ultima_nota: string
   ultima_accion_at: string
+  costo_dibujo: number
+  fecha_entrega_dibujo: string
 }
 
 type Movimiento = {
@@ -69,9 +71,9 @@ export default function TramiteDetalle() {
   const [editandoDatos, setEditandoDatos] = useState(false)
   const [nuevoEstado, setNuevoEstado] = useState('')
   const [nuevaNota, setNuevaNota] = useState('')
-  const [nuevaPelota, setNuevaPelota] = useState('')
+  const [nuevoResponsable, setNuevoResponsable] = useState('')
   const [nuevoLink, setNuevoLink] = useState('')
-  const [editN, setEditN] = useState({ parcelaria: '', expediente: '', dibujante: '' })
+  const [editN, setEditN] = useState({ parcelaria: '', expediente: '', dibujante: '', costo_dibujo: '', fecha_entrega: '' })
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -82,8 +84,14 @@ export default function TramiteDetalle() {
     const { data } = await supabase.from('tramites').select('*').eq('id', id).single()
     if (data) {
       setTramite(data)
-      setNuevaPelota(data.pelota || 'silvina')
-      setEditN({ parcelaria: data.n_parcelaria || '', expediente: data.n_expediente || '', dibujante: data.dibujante || '' })
+      setNuevoResponsable(data.pelota || 'admin')
+      setEditN({
+        parcelaria: data.n_parcelaria || '',
+        expediente: data.n_expediente || '',
+        dibujante: data.dibujante || '',
+        costo_dibujo: data.costo_dibujo || '',
+        fecha_entrega: data.fecha_entrega_dibujo || ''
+      })
     }
   }
 
@@ -98,11 +106,11 @@ export default function TramiteDetalle() {
     const estado = nuevoEstado || tramite?.estado_actual || ''
     await supabase.from('movimientos').insert({
       tramite_id: id, estado, nota: nuevaNota,
-      pelota: nuevaPelota, registrado_por: 'silvina',
+      pelota: nuevoResponsable, registrado_por: 'admin',
       link: nuevoLink
     })
     await supabase.from('tramites').update({
-      estado_actual: estado, pelota: nuevaPelota,
+      estado_actual: estado, pelota: nuevoResponsable,
       ultima_nota: nuevaNota, ultima_accion_at: new Date().toISOString(),
     }).eq('id', id)
     setNuevaNota(''); setNuevoEstado(''); setNuevoLink('')
@@ -116,18 +124,20 @@ export default function TramiteDetalle() {
       n_parcelaria: editN.parcelaria,
       n_expediente: editN.expediente,
       dibujante: editN.dibujante,
+      costo_dibujo: editN.costo_dibujo ? parseFloat(editN.costo_dibujo) : null,
+      fecha_entrega_dibujo: editN.fecha_entrega,
     }).eq('id', id)
     setSaving(false)
     setEditandoDatos(false)
     loadTramite()
   }
 
-  const pelotaColor = (p: string) => {
-    const colors: Record<string, string> = { silvina: '#3b82f6', fer: '#f97316', cliente: '#8b5cf6', municipio: TEAL, dibujante: '#fbbf24' }
+  const responsableColor = (p: string) => {
+    const colors: Record<string, string> = { admin: '#3b82f6', tecnica: '#f97316', cliente: '#8b5cf6', municipio: TEAL, dibujante: '#fbbf24' }
     return colors[p] || '#888'
   }
-  const pelotaLabel = (p: string) => {
-    const labels: Record<string, string> = { silvina: 'Silvina', fer: 'Fer', cliente: 'Cliente', municipio: 'Municipio', dibujante: 'Dibujante' }
+  const responsableLabel = (p: string) => {
+    const labels: Record<string, string> = { admin: 'Adm/Comercial', tecnica: 'Técnica', cliente: 'Cliente', municipio: 'Municipio', dibujante: 'Dibujante' }
     return labels[p] || p
   }
 
@@ -156,8 +166,8 @@ export default function TramiteDetalle() {
         </p>
         {tramite.ultima_nota && <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', margin: '0 0 10px', fontStyle: 'italic' }}>"{tramite.ultima_nota}"</p>}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.06)', padding: '5px 10px', borderRadius: 20, width: 'fit-content' }}>
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: pelotaColor(tramite.pelota) }} />
-          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Pelota: {pelotaLabel(tramite.pelota)}</span>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: responsableColor(tramite.pelota) }} />
+          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Responsable: {responsableLabel(tramite.pelota)}</span>
         </div>
       </div>
 
@@ -171,6 +181,25 @@ export default function TramiteDetalle() {
         {editandoDatos ? (
           <div style={{ display: 'grid', gap: 10 }}>
             <div>
+              <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Dibujante asignado</label>
+              <select value={editN.dibujante} onChange={e => setEditN(n => ({ ...n, dibujante: e.target.value }))}>
+                <option value="">Sin asignar</option>
+                {DIBUJANTES.map(d => <option key={d}>{d}</option>)}
+              </select>
+            </div>
+            {(tramite.estado_actual === 'en_dibujo' || editN.costo_dibujo || editN.fecha_entrega) && (
+              <>
+                <div>
+                  <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>✏️ Costo del dibujo (USD)</label>
+                  <input type="number" value={editN.costo_dibujo} onChange={e => setEditN(n => ({ ...n, costo_dibujo: e.target.value }))} placeholder="Ej: 150" />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>✏️ Fecha estimada de entrega</label>
+                  <input type="date" value={editN.fecha_entrega} onChange={e => setEditN(n => ({ ...n, fecha_entrega: e.target.value }))} />
+                </div>
+              </>
+            )}
+            <div>
               <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Número de parcelaria (Catastro)</label>
               <input value={editN.parcelaria} onChange={e => setEditN(n => ({ ...n, parcelaria: e.target.value }))} placeholder="Ej: 310" />
             </div>
@@ -178,22 +207,17 @@ export default function TramiteDetalle() {
               <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Número de expediente (Obras Part.)</label>
               <input value={editN.expediente} onChange={e => setEditN(n => ({ ...n, expediente: e.target.value }))} placeholder="Ej: 153/2026" />
             </div>
-            <div>
-              <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Dibujante asignado</label>
-              <select value={editN.dibujante} onChange={e => setEditN(n => ({ ...n, dibujante: e.target.value }))}>
-                <option value="">Sin asignar</option>
-                {DIBUJANTES.map(d => <option key={d}>{d}</option>)}
-              </select>
-            </div>
             <button onClick={guardarNumerosYDibujante} disabled={saving} style={{ padding: 10, fontSize: 13, fontWeight: 600, background: TEAL, color: '#1a2332', border: 'none', borderRadius: 10 }}>
               {saving ? 'Guardando...' : 'Guardar datos'}
             </button>
           </div>
         ) : (
           <div>
+            <Fila label="Dibujante" value={tramite.dibujante || '—'} />
+            {tramite.costo_dibujo > 0 && <Fila label="Costo dibujo" value={`USD ${tramite.costo_dibujo}`} />}
+            {tramite.fecha_entrega_dibujo && <Fila label="Entrega estimada" value={new Date(tramite.fecha_entrega_dibujo).toLocaleDateString('es-AR')} />}
             <Fila label="Parcelaria" value={tramite.n_parcelaria || '—'} />
             <Fila label="Exp. municipal" value={tramite.n_expediente || '—'} />
-            <Fila label="Dibujante" value={tramite.dibujante || '—'} />
             <Fila label="Firma" value={tramite.firma || '—'} />
             <Fila label="Domicilio" value={tramite.domicilio} />
             <Fila label="Celular" value={tramite.celular} />
@@ -220,15 +244,15 @@ export default function TramiteDetalle() {
             <input value={nuevoLink} onChange={e => setNuevoLink(e.target.value)} placeholder="https://www.dropbox.com/..." />
           </div>
           <div>
-            <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 6 }}>Pelota</label>
+            <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 6 }}>Responsable</label>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {PELOTA_OPS.map(p => (
-                <button key={p} onClick={() => setNuevaPelota(p)} style={{
+              {RESPONSABLE_OPS.map(p => (
+                <button key={p} onClick={() => setNuevoResponsable(p)} style={{
                   fontSize: 11, padding: '5px 11px', borderRadius: 20,
-                  border: `1.5px solid ${nuevaPelota === p ? 'rgba(45,212,176,0.4)' : BORDER}`,
-                  background: nuevaPelota === p ? 'rgba(45,212,176,0.15)' : 'transparent',
-                  color: nuevaPelota === p ? TEAL : 'rgba(255,255,255,0.5)'
-                }}>{pelotaLabel(p)}</button>
+                  border: `1.5px solid ${nuevoResponsable === p ? 'rgba(45,212,176,0.4)' : BORDER}`,
+                  background: nuevoResponsable === p ? 'rgba(45,212,176,0.15)' : 'transparent',
+                  color: nuevoResponsable === p ? TEAL : 'rgba(255,255,255,0.5)'
+                }}>{responsableLabel(p)}</button>
               ))}
             </div>
           </div>
@@ -266,8 +290,8 @@ export default function TramiteDetalle() {
                 }}>🔗 Ver archivo</a>
               )}
               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: pelotaColor(m.pelota) }} />
-                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>{pelotaLabel(m.pelota)}</span>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: responsableColor(m.pelota) }} />
+                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>{responsableLabel(m.pelota)}</span>
               </div>
             </div>
           ))}
