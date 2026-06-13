@@ -44,6 +44,7 @@ type Consulta = {
   aportes_m2: number
   obs_presupuesto: string
   info_faltante: string
+  archivos: string[]
 }
 
 export default function ValidarDetalle() {
@@ -196,7 +197,25 @@ export default function ValidarDetalle() {
           </div>
         )}
       </div>
-
+{consulta.archivos && consulta.archivos.length > 0 && (
+  <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${BORDER}` }}>
+    <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: '0 0 8px' }}>📎 Archivos adjuntos</p>
+    <div style={{ display: 'grid', gap: 6 }}>
+      {consulta.archivos.map((url: string, i: number) => {
+        const nombre = url.split('/').pop() || `Archivo ${i+1}`
+        return (
+          <a key={i} href={url} target="_blank" rel="noreferrer" style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '6px 10px',
+            color: TEAL, fontSize: 12, textDecoration: 'none'
+          }}>
+            📄 {nombre}
+          </a>
+        )
+      })}
+    </div>
+  </div>
+)}
       {/* VALIDACION */}
       <div style={{ background: DARK2, borderRadius: 14, border: `1.5px solid ${BORDER}`, padding: 14, marginBottom: 12 }}>
         <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.35)', letterSpacing: 1, textTransform: 'uppercase', margin: '0 0 12px' }}>Validación</p>
