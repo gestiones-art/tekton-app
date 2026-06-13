@@ -8,6 +8,7 @@ const BORDER = 'rgba(255,255,255,0.08)'
 
 type Consulta = {
   id: string
+  numero_p: string
   nombre: string
   domicilio: string
   municipio: string
@@ -22,13 +23,14 @@ const ESTADOS: Record<string, { label: string, color: string, bg: string }> = {
   pendiente_info: { label: 'Falta info', color: '#f87171', bg: 'rgba(248,113,113,0.15)' },
   validado: { label: 'Validado ✓', color: '#4ade80', bg: 'rgba(74,222,128,0.15)' },
   presupuestado: { label: 'Presupuestado', color: TEAL, bg: 'rgba(45,212,176,0.15)' },
+  cancelado: { label: 'Cancelado', color: 'rgba(255,255,255,0.3)', bg: 'rgba(255,255,255,0.06)' },
 }
 
 export default function ConsultasComercial() {
   const router = useRouter()
   const [consultas, setConsultas] = useState<Consulta[]>([])
   const [loading, setLoading] = useState(true)
-  const [filtro, setFiltro] = useState('todas')
+  const [filtro, setFiltro] = useState('activas')
 
   useEffect(() => { loadConsultas() }, [])
 
@@ -41,7 +43,11 @@ export default function ConsultasComercial() {
     setLoading(false)
   }
 
-  const filtradas = filtro === 'todas' ? consultas : consultas.filter(c => c.estado === filtro)
+  const filtradas = consultas.filter(c => {
+    if (filtro === 'activas') return c.estado !== 'cancelado' && c.estado !== 'presupuestado'
+    if (filtro === 'todas') return true
+    return c.estado === filtro
+  })
 
   return (
     <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem' }}>
@@ -52,7 +58,7 @@ export default function ConsultasComercial() {
         }}>←</button>
         <div>
           <p style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>Consultas</p>
-          <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: 0 }}>{consultas.length} en total</p>
+          <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: 0 }}>{filtradas.length} consultas</p>
         </div>
         <button onClick={() => router.push('/consultas/nueva')} style={{
           marginLeft: 'auto', fontSize: 12, padding: '7px 14px', borderRadius: 20,
@@ -62,10 +68,11 @@ export default function ConsultasComercial() {
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 14, overflowX: 'auto', paddingBottom: 4 }}>
         {[
-          { key: 'todas', label: 'Todas' },
+          { key: 'activas', label: 'Activas' },
           { key: 'pendiente_validacion', label: 'Pte. validación' },
           { key: 'validado', label: 'Validadas' },
           { key: 'presupuestado', label: 'Presupuestadas' },
+          { key: 'todas', label: 'Todas' },
         ].map(f => (
           <button key={f.key} onClick={() => setFiltro(f.key)} style={{
             fontSize: 11, padding: '5px 12px', borderRadius: 20, whiteSpace: 'nowrap',
@@ -91,10 +98,14 @@ export default function ConsultasComercial() {
               <button key={c.id} onClick={() => router.push(`/consultas/${c.id}`)} style={{
                 background: DARK2, borderRadius: 14,
                 border: `1.5px solid ${BORDER}`,
-                padding: 14, textAlign: 'left', width: '100%'
+                padding: 14, textAlign: 'left', width: '100%',
+                opacity: c.estado === 'cancelado' ? 0.5 : 1
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                  <p style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>{c.nombre}</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: TEAL }}>{c.numero_p || '#'}</span>
+                    <p style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>{c.nombre}</p>
+                  </div>
                   <span style={{ fontSize: 10, fontWeight: 700, background: est.bg, color: est.color, padding: '2px 8px', borderRadius: 20, flexShrink: 0, marginLeft: 8 }}>{est.label}</span>
                 </div>
                 <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', margin: '0 0 8px' }}>{c.domicilio} · {c.municipio}</p>
