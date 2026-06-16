@@ -67,18 +67,21 @@ export default function Tramites() {
   const porEtapa = (key: string) => tramites.filter(t => t.estado_actual === key)
   const diasSinMover = (fecha: string) => Math.floor((Date.now() - new Date(fecha).getTime()) / (1000 * 60 * 60 * 24))
 
-  const pelotaColor = (p: string) => {
-    const colors: Record<string, string> = { silvina: '#3b82f6', fer: '#f97316', cliente: '#8b5cf6', municipio: TEAL, dibujante: '#fbbf24' }
+  const responsableColor = (p: string) => {
+    const colors: Record<string, string> = { admin: '#3b82f6', tecnica: '#f97316', cliente: '#8b5cf6', municipio: TEAL, dibujante: '#fbbf24' }
     return colors[p] || '#888'
   }
-  const pelotaLabel = (p: string) => {
-    const labels: Record<string, string> = { silvina: 'Silvina', fer: 'Fer', cliente: 'Cliente', municipio: 'Municipio', dibujante: 'Dibujante' }
+  const responsableLabel = (p: string) => {
+    const labels: Record<string, string> = { admin: 'Adm/Comercial', tecnica: 'Técnica', cliente: 'Cliente', municipio: 'Municipio', dibujante: 'Dibujante' }
     return labels[p] || p
   }
 
   if (etapaFiltro) {
     const etapa = ETAPAS.find(e => e.key === etapaFiltro)
     const items = porEtapa(etapaFiltro)
+    const esCatastro = etapaFiltro.includes('catastro')
+    const esObras = etapaFiltro.includes('obras')
+
     return (
       <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem' }}>
@@ -91,6 +94,7 @@ export default function Tramites() {
             <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: 0 }}>{items.length} expedientes</p>
           </div>
         </div>
+
         {items.length === 0 ? (
           <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)', marginTop: 60 }}>
             <p style={{ fontSize: 32, marginBottom: 12 }}>✅</p>
@@ -98,7 +102,57 @@ export default function Tramites() {
           </div>
         ) : (
           <div style={{ display: 'grid', gap: 10 }}>
-            {items.map(t => <TramiteCard key={t.id} t={t} onClick={() => router.push(`/tramites/${t.id}`)} pelotaColor={pelotaColor} pelotaLabel={pelotaLabel} diasSinMover={diasSinMover} />)}
+            {items.map(t => {
+              const dias = diasSinMover(t.ultima_accion_at)
+              const vencido = dias > 7 && t.pelota !== 'municipio'
+              return (
+                <button key={t.id} onClick={() => router.push(`/tramites/${t.id}`)} style={{
+                  background: DARK2, borderRadius: 14,
+                  border: `1.5px solid ${vencido ? 'rgba(248,113,113,0.3)' : BORDER}`,
+                  padding: 14, textAlign: 'left', width: '100%'
+                }}>
+                  {/* CATASTRO: parcelaria primero */}
+                  {esCatastro && t.n_parcelaria && (
+                    <div style={{ marginBottom: 6 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: TEAL, background: 'rgba(45,212,176,0.12)', padding: '2px 10px', borderRadius: 20 }}>
+                        Parcelaria {t.n_parcelaria}
+                      </span>
+                    </div>
+                  )}
+                  {/* OBRAS: expediente primero */}
+                  {esObras && t.n_expediente && (
+                    <div style={{ marginBottom: 6 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: TEAL, background: 'rgba(45,212,176,0.12)', padding: '2px 10px', borderRadius: 20 }}>
+                        Exp: {t.n_expediente}
+                      </span>
+                    </div>
+                  )}
+                  {/* NOMBRE Y NÚMERO */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    {!esCatastro && !esObras && t.numero_p && (
+                      <span style={{ fontSize: 12, fontWeight: 700, color: TEAL }}>{t.numero_p}</span>
+                    )}
+                    <p style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#fff' }}>{t.nombre}</p>
+                  </div>
+                  <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', margin: '0 0 8px' }}>
+                    {t.domicilio && `${t.domicilio} · `}{t.tramite}
+                  </p>
+                  {t.ultima_nota && (
+                    <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', margin: '0 0 8px', fontStyle: 'italic' }}>"{t.ultima_nota}"</p>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <div style={{ width: 7, height: 7, borderRadius: '50%', background: responsableColor(t.pelota) }} />
+                      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>{responsableLabel(t.pelota)}</span>
+                    </div>
+                    {t.dibujante && <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>· {t.dibujante}</span>}
+                    {esCatastro && t.numero_p && <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>· {t.numero_p}</span>}
+                    {esObras && t.numero_p && <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>· {t.numero_p}</span>}
+                    {vencido && <span style={{ fontSize: 11, color: '#f87171', marginLeft: 'auto' }}>⚠ {dias}d sin mover</span>}
+                  </div>
+                </button>
+              )
+            })}
           </div>
         )}
       </div>
@@ -121,7 +175,7 @@ export default function Tramites() {
       {loading ? (
         <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)', marginTop: 60 }}>Cargando...</div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
           {ETAPAS.map(etapa => {
             const items = porEtapa(etapa.key)
             const vencidos = items.filter(t => diasSinMover(t.ultima_accion_at) > 7 && t.pelota !== 'municipio').length
@@ -133,62 +187,25 @@ export default function Tramites() {
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                   <div style={{
-                    width: 34, height: 34, background: `${etapa.color}22`,
-                    borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17
+                    width: 36, height: 36, background: `${etapa.color}22`,
+                    borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20
                   }}>{etapa.icon}</div>
                   <span style={{
-                    fontSize: 10, fontWeight: 700,
+                    fontSize: 11, fontWeight: 700,
                     background: vencidos > 0 ? 'rgba(248,113,113,0.15)' : items.length > 0 ? 'rgba(251,191,36,0.15)' : 'rgba(74,222,128,0.15)',
                     color: vencidos > 0 ? '#f87171' : items.length > 0 ? '#fbbf24' : '#4ade80',
-                    padding: '2px 7px', borderRadius: 20
+                    padding: '3px 9px', borderRadius: 20
                   }}>
                     {vencidos > 0 ? `⚠ ${vencidos} vencida` : items.length > 0 ? `${items.length} activos` : 'al día'}
                   </span>
                 </div>
-                <p style={{ fontSize: 12, fontWeight: 600, margin: '0 0 2px', color: etapa.key === 'en_pausa' ? 'rgba(255,255,255,0.4)' : '#fff' }}>{etapa.label}</p>
-                <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: 0 }}>{items.length} expedientes →</p>
+                <p style={{ fontSize: 15, fontWeight: 700, margin: '0 0 4px', color: etapa.key === 'en_pausa' ? 'rgba(255,255,255,0.4)' : '#fff' }}>{etapa.label}</p>
+                <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', margin: 0, fontWeight: 600 }}>{items.length} expedientes →</p>
               </button>
             )
           })}
         </div>
       )}
     </div>
-  )
-}
-
-function TramiteCard({ t, onClick, pelotaColor, pelotaLabel, diasSinMover }: {
-  t: Tramite, onClick: () => void,
-  pelotaColor: (p: string) => string, pelotaLabel: (p: string) => string,
-  diasSinMover: (f: string) => number
-}) {
-  const dias = diasSinMover(t.ultima_accion_at)
-  const vencido = dias > 7 && t.pelota !== 'municipio'
-  return (
-    <button onClick={onClick} style={{
-      background: DARK2, borderRadius: 12,
-      border: `1.5px solid ${vencido ? 'rgba(248,113,113,0.3)' : BORDER}`,
-      padding: 12, textAlign: 'left', width: '100%'
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {t.numero_p && <span style={{ fontSize: 11, fontWeight: 700, color: TEAL }}>{t.numero_p}</span>}
-          <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>{t.nombre}</p>
-        </div>
-        <span style={{ fontSize: 10, background: 'rgba(45,212,176,0.12)', color: TEAL, padding: '2px 7px', borderRadius: 20 }}>{t.municipio}</span>
-      </div>
-      <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: '0 0 6px' }}>{t.domicilio} · {t.tramite}</p>
-      {t.ultima_nota && (
-        <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', margin: '0 0 6px', fontStyle: 'italic' }}>"{t.ultima_nota}"</p>
-      )}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-          <div style={{ width: 7, height: 7, borderRadius: '50%', background: pelotaColor(t.pelota) }} />
-          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>{pelotaLabel(t.pelota)}</span>
-        </div>
-        {t.dibujante && <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>· {t.dibujante}</span>}
-        {t.n_expediente && <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>Exp: {t.n_expediente}</span>}
-        {vencido && <span style={{ fontSize: 10, color: '#f87171', marginLeft: 'auto' }}>⚠ {dias}d sin mover</span>}
-      </div>
-    </button>
   )
 }
