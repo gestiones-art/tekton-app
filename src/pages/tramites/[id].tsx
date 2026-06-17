@@ -29,7 +29,7 @@ const ESTADOS = [
 ]
 
 const RESPONSABLE_OPS = ['admin', 'tecnica', 'dibujante', 'cliente', 'municipio']
-const DIBUJANTES = ['Mario', 'Meli', 'Caro', 'Mili', 'Maria']
+const DIBUJANTES = ['Mario', 'Meli', 'Caro', 'Mili', 'Maria', 'Fer']
 
 type Tramite = {
   id: string
@@ -183,8 +183,13 @@ export default function TramiteDetalle() {
             <div>
               <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Dibujante asignado</label>
               <select value={editN.dibujante} onChange={e => setEditN(n => ({ ...n, dibujante: e.target.value }))}>
-                <option value="">Sin asignar</option>
-                {DIBUJANTES.map(d => <option key={d}>{d}</option>)}
+             <option value="">Sin asignar</option>
+{DIBUJANTES.map(d => <option key={d}>{d}</option>)}
+<option value="personalizado">+ Escribir nombre...</option>
+                {editN.dibujante === 'personalizado' && (
+  <input value={editN.dibujante_custom || ''} onChange={e => setEditN(n => ({ ...n, dibujante_custom: e.target.value }))} placeholder="Nombre del dibujante" style={{ marginTop: 6 }} />
+)}
+                <option value="otro">+ Escribir nombre</option>
               </select>
             </div>
             {(tramite.estado_actual === 'en_dibujo' || editN.costo_dibujo || editN.fecha_entrega) && (
