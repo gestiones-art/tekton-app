@@ -19,10 +19,6 @@ type Consulta = {
   tramite: string
   prioridad: string
   firma: string
-  firmante_nombre: string
-  firmante_apellido: string
-  firmante_mat_provincial: string
-  firmante_mat_municipal: string
   como_conocio: string
   observaciones: string
   created_at: string
@@ -44,6 +40,7 @@ export default function ConsultaDetalle() {
   const [form, setForm] = useState<Partial<Consulta>>({})
   const [saving, setSaving] = useState(false)
   const [showCancelar, setShowCancelar] = useState(false)
+  const [showBorrar, setShowBorrar] = useState(false)
   const [motivoCancelacion, setMotivoCancelacion] = useState('')
 
   useEffect(() => { if (id) loadConsulta() }, [id])
@@ -58,14 +55,10 @@ export default function ConsultaDetalle() {
   async function guardarEdicion() {
     setSaving(true)
     await supabase.from('consultas').update({
-      nombre: form.nombre,
-      celular: form.celular,
-      domicilio: form.domicilio,
-      municipio: form.municipio,
-      tramite: form.tramite,
-      prioridad: form.prioridad,
-      como_conocio: form.como_conocio,
-      observaciones: form.observaciones,
+      nombre: form.nombre, celular: form.celular,
+      domicilio: form.domicilio, municipio: form.municipio,
+      tramite: form.tramite, prioridad: form.prioridad,
+      como_conocio: form.como_conocio, observaciones: form.observaciones,
       estado: 'pendiente_validacion',
     }).eq('id', id)
     setSaving(false)
@@ -85,11 +78,17 @@ export default function ConsultaDetalle() {
     loadConsulta()
   }
 
+  async function borrarConsulta() {
+    setSaving(true)
+    await supabase.from('consultas').delete().eq('id', id)
+    setSaving(false)
+    router.push('/consultas')
+  }
+
   async function reenviarATecnica() {
     setSaving(true)
     await supabase.from('consultas').update({
-      estado: 'pendiente_validacion',
-      info_faltante: ''
+      estado: 'pendiente_validacion', info_faltante: ''
     }).eq('id', id)
     setSaving(false)
     loadConsulta()
@@ -157,6 +156,24 @@ export default function ConsultaDetalle() {
             {consulta.observaciones && <Campo label="Observaciones" value={consulta.observaciones} />}
           </div>
 
+          {consulta.archivos && consulta.archivos.length > 0 && (
+            <div style={{ background: DARK2, borderRadius: 14, border: `1.5px solid ${BORDER}`, padding: 14 }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.35)', letterSpacing: 1, textTransform: 'uppercase', margin: '0 0 10px' }}>📎 Archivos adjuntos</p>
+              <div style={{ display: 'grid', gap: 6 }}>
+                {consulta.archivos.map((url: string, i: number) => {
+                  const nombre = url.split('/').pop() || `Archivo ${i + 1}`
+                  return (
+                    <a key={i} href={url} target="_blank" rel="noreferrer" style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '6px 10px',
+                      color: TEAL, fontSize: 12, textDecoration: 'none'
+                    }}>📄 {nombre}</a>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {consulta.obs_presupuesto && (
             <div style={{ background: 'rgba(45,212,176,0.08)', borderRadius: 14, border: '1.5px solid rgba(45,212,176,0.2)', padding: 14 }}>
               <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(45,212,176,0.7)', letterSpacing: 1, textTransform: 'uppercase', margin: '0 0 10px' }}>Info técnica</p>
@@ -167,21 +184,26 @@ export default function ConsultaDetalle() {
             </div>
           )}
 
-          {!cancelada && (
-            <div style={{ display: 'grid', gap: 8 }}>
-              {consulta.estado === 'validado' && (
-                <button onClick={() => router.push(`/presupuestos/nuevo?consulta=${id}`)} style={{
-                  padding: 12, fontSize: 14, fontWeight: 600,
-                  background: TEAL, color: '#1a2332', border: 'none', borderRadius: 14
-                }}>Generar presupuesto →</button>
-              )}
+          <div style={{ display: 'grid', gap: 8 }}>
+            {!cancelada && consulta.estado === 'validado' && (
+              <button onClick={() => router.push(`/presupuestos/nuevo?consulta=${id}`)} style={{
+                padding: 12, fontSize: 14, fontWeight: 600,
+                background: TEAL, color: '#1a2332', border: 'none', borderRadius: 14
+              }}>Generar presupuesto →</button>
+            )}
+            {!cancelada && (
               <button onClick={() => setShowCancelar(true)} style={{
                 padding: 10, fontSize: 13,
                 background: 'transparent', border: '1.5px solid rgba(248,113,113,0.3)',
                 color: '#f87171', borderRadius: 14
               }}>Cancelar consulta</button>
-            </div>
-          )}
+            )}
+            <button onClick={() => setShowBorrar(true)} style={{
+              padding: 10, fontSize: 13,
+              background: 'transparent', border: '1.5px solid rgba(255,255,255,0.1)',
+              color: 'rgba(255,255,255,0.3)', borderRadius: 14
+            }}>Borrar definitivamente</button>
+          </div>
         </div>
       ) : (
         <div style={{ display: 'grid', gap: 12 }}>
@@ -232,15 +254,32 @@ export default function ConsultaDetalle() {
         </div>
       )}
 
+      {/* MODAL CANCELAR */}
       {showCancelar && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, zIndex: 100 }}>
           <div style={{ background: '#1a2332', borderRadius: 18, padding: 24, width: '100%', maxWidth: 360, border: `1.5px solid ${BORDER}` }}>
             <p style={{ fontSize: 15, fontWeight: 600, margin: '0 0 8px' }}>Cancelar consulta</p>
-            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', margin: '0 0 14px' }}>¿Por qué se cancela?</p>
-            <textarea value={motivoCancelacion} onChange={e => setMotivoCancelacion(e.target.value)} placeholder="Ej: el cliente desistió, fuera de zona, etc." style={{ minHeight: 72, marginBottom: 14 }} />
+            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', margin: '0 0 14px' }}>La consulta queda registrada como cancelada.</p>
+            <textarea value={motivoCancelacion} onChange={e => setMotivoCancelacion(e.target.value)}
+              placeholder="Ej: el cliente desistió, fuera de zona, etc."
+              style={{ minHeight: 72, marginBottom: 14 }} />
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <button onClick={() => setShowCancelar(false)} style={{ padding: 10, fontSize: 13, color: 'rgba(255,255,255,0.5)', background: 'transparent', border: `1.5px solid ${BORDER}`, borderRadius: 10 }}>Volver</button>
-              <button onClick={cancelarConsulta} disabled={!motivoCancelacion || saving} style={{ padding: 10, fontSize: 13, fontWeight: 600, background: '#f87171', color: '#fff', border: 'none', borderRadius: 10, opacity: !motivoCancelacion ? 0.5 : 1 }}>Cancelar consulta</button>
+              <button onClick={cancelarConsulta} disabled={!motivoCancelacion || saving} style={{ padding: 10, fontSize: 13, fontWeight: 600, background: '#f87171', color: '#fff', border: 'none', borderRadius: 10, opacity: !motivoCancelacion ? 0.5 : 1 }}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL BORRAR */}
+      {showBorrar && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, zIndex: 100 }}>
+          <div style={{ background: '#1a2332', borderRadius: 18, padding: 24, width: '100%', maxWidth: 360, border: `1.5px solid ${BORDER}` }}>
+            <p style={{ fontSize: 15, fontWeight: 600, margin: '0 0 8px' }}>Borrar consulta</p>
+            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', margin: '0 0 20px' }}>Esto borra la consulta definitivamente. No se puede deshacer.</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <button onClick={() => setShowBorrar(false)} style={{ padding: 10, fontSize: 13, color: 'rgba(255,255,255,0.5)', background: 'transparent', border: `1.5px solid ${BORDER}`, borderRadius: 10 }}>Volver</button>
+              <button onClick={borrarConsulta} disabled={saving} style={{ padding: 10, fontSize: 13, fontWeight: 600, background: '#f87171', color: '#fff', border: 'none', borderRadius: 10 }}>Borrar</button>
             </div>
           </div>
         </div>
