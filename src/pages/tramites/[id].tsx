@@ -73,6 +73,7 @@ export default function TramiteDetalle() {
   const [nuevaNota, setNuevaNota] = useState('')
   const [nuevoResponsable, setNuevoResponsable] = useState('')
   const [nuevoLink, setNuevoLink] = useState('')
+  const [dibujante_custom, setDibujanteCustom] = useState('')
   const [editN, setEditN] = useState({ parcelaria: '', expediente: '', dibujante: '', costo_dibujo: '', fecha_entrega: '' })
   const [saving, setSaving] = useState(false)
 
@@ -120,10 +121,11 @@ export default function TramiteDetalle() {
 
   async function guardarNumerosYDibujante() {
     setSaving(true)
+    const dibujanteFinal = editN.dibujante === 'otro' ? dibujante_custom : editN.dibujante
     await supabase.from('tramites').update({
       n_parcelaria: editN.parcelaria,
       n_expediente: editN.expediente,
-      dibujante: editN.dibujante,
+      dibujante: dibujanteFinal,
       costo_dibujo: editN.costo_dibujo ? parseFloat(editN.costo_dibujo) : null,
       fecha_entrega_dibujo: editN.fecha_entrega,
     }).eq('id', id)
@@ -183,14 +185,13 @@ export default function TramiteDetalle() {
             <div>
               <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Dibujante asignado</label>
               <select value={editN.dibujante} onChange={e => setEditN(n => ({ ...n, dibujante: e.target.value }))}>
-             <option value="">Sin asignar</option>
-{DIBUJANTES.map(d => <option key={d}>{d}</option>)}
-<option value="personalizado">+ Escribir nombre...</option>
-                {editN.dibujante === 'personalizado' && (
-  <input value={editN.dibujante_custom || ''} onChange={e => setEditN(n => ({ ...n, dibujante_custom: e.target.value }))} placeholder="Nombre del dibujante" style={{ marginTop: 6 }} />
-)}
-                <option value="otro">+ Escribir nombre</option>
+                <option value="">Sin asignar</option>
+                {DIBUJANTES.map(d => <option key={d}>{d}</option>)}
+                <option value="otro">+ Escribir nombre...</option>
               </select>
+              {editN.dibujante === 'otro' && (
+                <input value={dibujante_custom} onChange={e => setDibujanteCustom(e.target.value)} placeholder="Nombre del dibujante" style={{ marginTop: 6 }} />
+              )}
             </div>
             {(tramite.estado_actual === 'en_dibujo' || editN.costo_dibujo || editN.fecha_entrega) && (
               <>
