@@ -6,7 +6,6 @@ const TEAL = '#2dd4b0'
 const DARK2 = '#243044'
 const BORDER = 'rgba(255,255,255,0.08)'
 
-// Mapa de valores viejos → nuevos (para compatibilidad con datos existentes)
 const ESTADO_MAP: Record<string, string> = {
   en_dibujo: 'dibujo',
   observado_catastro: 'correc_catastro',
@@ -79,7 +78,6 @@ export default function Tramites() {
     setLoading(false)
   }
 
-  // Normaliza estado_actual: si viene valor viejo, lo mapea al nuevo
   const estadoNorm = (t: Tramite) => ESTADO_MAP[t.estado_actual] || t.estado_actual
 
   const porResponsable = (key: string) => tramites.filter(t => t.pelota === key)
@@ -133,8 +131,8 @@ export default function Tramites() {
       : `${responsableActual?.icon} ${responsableActual?.label}`
 
     return (
-      <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem' }}>
+      <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem', width: '100%', maxWidth: 480 }}>
           <button onClick={volver} style={{
             width: 32, height: 32, background: 'rgba(255,255,255,0.06)',
             border: `1.5px solid ${BORDER}`, borderRadius: 8, color: 'rgba(255,255,255,0.6)', fontSize: 16
@@ -151,7 +149,7 @@ export default function Tramites() {
             <p>No hay expedientes acá</p>
           </div>
         ) : (
-          <div style={{ display: 'grid', gap: 10 }}>
+          <div style={{ display: 'grid', gap: 10, width: '100%', maxWidth: 480 }}>
             {itemsLista.map(t => {
               const dias = diasSinMover(t.ultima_accion_at)
               const esVencido = dias > 7 && t.pelota !== 'municipio'
@@ -165,35 +163,26 @@ export default function Tramites() {
                   border: `1.5px solid ${esVencido ? 'rgba(248,113,113,0.3)' : BORDER}`,
                   padding: 14, textAlign: 'left', width: '100%'
                 }}>
-                  {/* Número + nombre */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                     {t.numero_p && (
                       <span style={{ fontSize: 12, fontWeight: 700, color: TEAL }}>{t.numero_p}</span>
                     )}
                     <p style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#fff' }}>{t.nombre}</p>
                   </div>
-
-                  {/* Domicilio + tipo */}
                   <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', margin: '0 0 6px' }}>
                     {t.domicilio && `${t.domicilio} · `}{t.tramite}
                   </p>
-
-                  {/* Parcelaria / Expediente si corresponde */}
                   {t.n_parcelaria && (
                     <span style={{ fontSize: 11, color: TEAL, marginRight: 8 }}>📍 {t.n_parcelaria}</span>
                   )}
                   {t.n_expediente && (
                     <span style={{ fontSize: 11, color: TEAL }}>📁 {t.n_expediente}</span>
                   )}
-
-                  {/* Última nota */}
                   {t.ultima_nota && (
                     <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', margin: '6px 0 0', fontStyle: 'italic' }}>
                       "{t.ultima_nota}"
                     </p>
                   )}
-
-                  {/* Footer */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
                     {t.dibujante && (
                       <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>✏️ {t.dibujante}</span>
@@ -219,8 +208,8 @@ export default function Tramites() {
     const totalResponsable = porResponsable(responsableFiltro!).length
 
     return (
-      <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem' }}>
+      <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem', width: '100%', maxWidth: 480 }}>
           <button onClick={volver} style={{
             width: 32, height: 32, background: 'rgba(255,255,255,0.06)',
             border: `1.5px solid ${BORDER}`, borderRadius: 8, color: 'rgba(255,255,255,0.6)', fontSize: 16
@@ -233,7 +222,7 @@ export default function Tramites() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gap: 10 }}>
+        <div style={{ display: 'grid', gap: 10, width: '100%', maxWidth: 480 }}>
           {subestados.map(sub => {
             const items = porSubestado(responsableFiltro!, sub.key)
             const v = vencidos(items)
@@ -277,8 +266,8 @@ export default function Tramites() {
 
   // ── VISTA BLOQUES PRINCIPAL ──────────────────────────────────
   return (
-    <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem' }}>
+    <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem', width: '100%', maxWidth: 420 }}>
         <button onClick={() => router.push('/')} style={{
           width: 32, height: 32, background: 'rgba(255,255,255,0.06)',
           border: `1.5px solid ${BORDER}`, borderRadius: 8, color: 'rgba(255,255,255,0.6)', fontSize: 16
@@ -292,7 +281,7 @@ export default function Tramites() {
       {loading ? (
         <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)', marginTop: 60 }}>Cargando...</div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, width: '100%', maxWidth: 420 }}>
           {RESPONSABLES.map(resp => {
             const items = porResponsable(resp.key)
             const v = vencidos(items)
@@ -316,8 +305,8 @@ export default function Tramites() {
                     {v > 0 ? `⚠ ${v}` : items.length > 0 ? items.length : '✓'}
                   </span>
                 </div>
-                <p style={{ fontSize: 15, fontWeight: 700, margin: '0 0 4px', color: '#fff' }}>{resp.label}</p>
-                <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', margin: 0, fontWeight: 600 }}>
+                <p style={{ fontSize: 14, fontWeight: 700, margin: '0 0 4px', color: '#fff' }}>{resp.label}</p>
+                <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', margin: 0, fontWeight: 600 }}>
                   {items.length} expediente{items.length !== 1 ? 's' : ''} →
                 </p>
               </button>
