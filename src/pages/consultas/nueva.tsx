@@ -53,7 +53,7 @@ export default function NuevaConsulta() {
       firma: form.firma,
       como_conocio: form.como_conocio,
       observaciones: form.observaciones,
-      estado: 'pendiente_validacion',
+      estado: 'pendiente',
       created_at: new Date().toISOString()
     }).select().single()
 
