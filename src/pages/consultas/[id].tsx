@@ -178,7 +178,7 @@ export default function ConsultaDetalle() {
   function notificarTecnica() {
     if (!consulta) return
     const msg = `Hola Fer! Nueva consulta para validar 👇\n*${consulta.numero_p} — ${consulta.nombre}*\n${consulta.tramite} · ${consulta.municipio}\n${consulta.domicilio ? consulta.domicilio + '\n' : ''}${consulta.observaciones ? 'Obs: ' + consulta.observaciones + '\n' : ''}\nVer acá: https://tekton-app-nuevo.vercel.app/consultas/${id}`
-    window.open(`https://wa.me/${FER_PHONE}?text=${encodeURIComponent(msg)}`, '_blank')
+   window.location.href = `https://wa.me/${FER_PHONE}?text=${encodeURIComponent(msg)}`
   }
 
   if (!consulta) return <div style={{ background: '#1a2332', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.4)' }}>Cargando...</div>
