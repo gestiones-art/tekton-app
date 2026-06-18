@@ -6,15 +6,38 @@ const TEAL = '#2dd4b0'
 const DARK2 = '#243044'
 const BORDER = 'rgba(255,255,255,0.08)'
 
-const ETAPAS = [
-  { key: 'en_dibujo', label: 'Dibujo', icon: '✏️', color: '#fbbf24' },
-  { key: 'presentado_catastro', label: 'Inicio Catastro', icon: '📤', color: TEAL },
-  { key: 'observado_catastro', label: 'Correc. Catastro', icon: '🏛️', color: '#f87171' },
-  { key: 'presentado_obras', label: 'Obras Particulares', icon: '🏠', color: TEAL },
-  { key: 'correc_visado', label: 'Correc. Visado', icon: '📋', color: '#fbbf24' },
-  { key: 'estructura_en_proceso', label: 'Estructura', icon: '🏗️', color: TEAL },
-  { key: 'pendiente_colegio', label: 'Colegio', icon: '🎓', color: TEAL },
-  { key: 'en_pausa', label: 'En pausa', icon: '⏸️', color: 'rgba(255,255,255,0.3)' },
+// Mapa de valores viejos → nuevos (para compatibilidad con datos existentes)
+const ESTADO_MAP: Record<string, string> = {
+  en_dibujo: 'dibujo',
+  observado_catastro: 'correc_catastro',
+  presentado_catastro: 'catastro',
+  correc_visado: 'correc_op',
+  presentado_obras: 'obras',
+  estructura_en_proceso: 'otros',
+  pendiente_colegio: 'otros',
+  en_pausa: 'otros',
+}
+
+const RESPONSABLES = [
+  { key: 'admin', label: 'Adm / Comercial', icon: '🏢', color: '#3b82f6' },
+  { key: 'tecnica', label: 'Técnica', icon: '📐', color: '#f97316' },
+  { key: 'municipio', label: 'Municipio', icon: '🏛️', color: TEAL },
+  { key: 'cliente', label: 'Cliente', icon: '👤', color: '#8b5cf6' },
+]
+
+const SUBESTADOS_TECNICA = [
+  { key: 'dibujo', label: 'Dibujo', icon: '✏️' },
+  { key: 'correc_catastro', label: 'Correc. Catastro', icon: '🏛️' },
+  { key: 'correc_op', label: 'Correc. OP', icon: '📋' },
+  { key: 'validar_presu', label: 'Validar Presu.', icon: '💰' },
+  { key: 'otros', label: 'Otros', icon: '📎' },
+]
+
+const SUBESTADOS_MUNICIPIO = [
+  { key: 'catastro', label: 'Catastro', icon: '🗂️' },
+  { key: 'obras', label: 'Obras Particulares', icon: '🏠' },
+  { key: 'ordenamiento', label: 'Ordenamiento Urbano', icon: '🗺️' },
+  { key: 'otros', label: 'Otros', icon: '📎' },
 ]
 
 type Tramite = {
@@ -31,28 +54,20 @@ type Tramite = {
   n_expediente: string
   n_parcelaria: string
   dibujante: string
+  checklist: Record<string, boolean>
 }
+
+type Vista = 'bloques' | 'lista' | 'subestados'
 
 export default function Tramites() {
   const router = useRouter()
   const [tramites, setTramites] = useState<Tramite[]>([])
   const [loading, setLoading] = useState(true)
-  const [etapaFiltro, setEtapaFiltro] = useState<string | null>(null)
+  const [vista, setVista] = useState<Vista>('bloques')
+  const [responsableFiltro, setResponsableFiltro] = useState<string | null>(null)
+  const [subestadoFiltro, setSubestadoFiltro] = useState<string | null>(null)
 
-  useEffect(() => {
-    const etapa = router.query.etapa as string
-    if (etapa) {
-      const map: Record<string, string> = {
-        dibujo: 'en_dibujo',
-        catastro: 'observado_catastro',
-        visado: 'correc_visado',
-        estructura: 'estructura_en_proceso',
-        colegio: 'pendiente_colegio',
-      }
-      setEtapaFiltro(map[etapa] || null)
-    }
-    loadTramites()
-  }, [router.query])
+  useEffect(() => { loadTramites() }, [])
 
   async function loadTramites() {
     const { data } = await supabase
@@ -64,91 +79,131 @@ export default function Tramites() {
     setLoading(false)
   }
 
-  const porEtapa = (key: string) => tramites.filter(t => t.estado_actual === key)
-  const diasSinMover = (fecha: string) => Math.floor((Date.now() - new Date(fecha).getTime()) / (1000 * 60 * 60 * 24))
+  // Normaliza estado_actual: si viene valor viejo, lo mapea al nuevo
+  const estadoNorm = (t: Tramite) => ESTADO_MAP[t.estado_actual] || t.estado_actual
 
-  const responsableColor = (p: string) => {
-    const colors: Record<string, string> = { admin: '#3b82f6', tecnica: '#f97316', cliente: '#8b5cf6', municipio: TEAL, dibujante: '#fbbf24' }
-    return colors[p] || '#888'
-  }
-  const responsableLabel = (p: string) => {
-    const labels: Record<string, string> = { admin: 'Adm/Comercial', tecnica: 'Técnica', cliente: 'Cliente', municipio: 'Municipio', dibujante: 'Dibujante' }
-    return labels[p] || p
+  const porResponsable = (key: string) => tramites.filter(t => t.pelota === key)
+  const porSubestado = (responsable: string, sub: string) =>
+    tramites.filter(t => t.pelota === responsable && estadoNorm(t) === sub)
+
+  const diasSinMover = (fecha: string) =>
+    Math.floor((Date.now() - new Date(fecha).getTime()) / (1000 * 60 * 60 * 24))
+
+  const vencidos = (items: Tramite[]) =>
+    items.filter(t => diasSinMover(t.ultima_accion_at) > 7 && t.pelota !== 'municipio').length
+
+  function irAResponsable(key: string) {
+    setResponsableFiltro(key)
+    if (key === 'tecnica' || key === 'municipio') {
+      setVista('subestados')
+    } else {
+      setSubestadoFiltro(null)
+      setVista('lista')
+    }
   }
 
-  if (etapaFiltro) {
-    const etapa = ETAPAS.find(e => e.key === etapaFiltro)
-    const items = porEtapa(etapaFiltro)
-    const esCatastro = etapaFiltro.includes('catastro')
-    const esObras = etapaFiltro.includes('obras')
+  function irASubestado(sub: string) {
+    setSubestadoFiltro(sub)
+    setVista('lista')
+  }
+
+  function volver() {
+    if (vista === 'lista' && (responsableFiltro === 'tecnica' || responsableFiltro === 'municipio')) {
+      setVista('subestados')
+      setSubestadoFiltro(null)
+    } else {
+      setVista('bloques')
+      setResponsableFiltro(null)
+      setSubestadoFiltro(null)
+    }
+  }
+
+  const itemsLista = subestadoFiltro
+    ? porSubestado(responsableFiltro!, subestadoFiltro)
+    : responsableFiltro ? porResponsable(responsableFiltro) : []
+
+  const responsableActual = RESPONSABLES.find(r => r.key === responsableFiltro)
+  const subestados = responsableFiltro === 'tecnica' ? SUBESTADOS_TECNICA : SUBESTADOS_MUNICIPIO
+  const subestadoActual = subestados.find(s => s.key === subestadoFiltro)
+
+  // ── VISTA LISTA ──────────────────────────────────────────────
+  if (vista === 'lista') {
+    const titulo = subestadoActual
+      ? `${subestadoActual.icon} ${subestadoActual.label}`
+      : `${responsableActual?.icon} ${responsableActual?.label}`
 
     return (
       <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem' }}>
-          <button onClick={() => { setEtapaFiltro(null); router.push('/tramites') }} style={{
+          <button onClick={volver} style={{
             width: 32, height: 32, background: 'rgba(255,255,255,0.06)',
             border: `1.5px solid ${BORDER}`, borderRadius: 8, color: 'rgba(255,255,255,0.6)', fontSize: 16
           }}>←</button>
           <div>
-            <p style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>{etapa?.icon} {etapa?.label}</p>
-            <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: 0 }}>{items.length} expedientes</p>
+            <p style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>{titulo}</p>
+            <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: 0 }}>{itemsLista.length} expedientes</p>
           </div>
         </div>
 
-        {items.length === 0 ? (
+        {itemsLista.length === 0 ? (
           <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)', marginTop: 60 }}>
             <p style={{ fontSize: 32, marginBottom: 12 }}>✅</p>
-            <p>No hay expedientes en esta etapa</p>
+            <p>No hay expedientes acá</p>
           </div>
         ) : (
           <div style={{ display: 'grid', gap: 10 }}>
-            {items.map(t => {
+            {itemsLista.map(t => {
               const dias = diasSinMover(t.ultima_accion_at)
-              const vencido = dias > 7 && t.pelota !== 'municipio'
+              const esVencido = dias > 7 && t.pelota !== 'municipio'
+              const checkPendientes = t.checklist
+                ? Object.values(t.checklist).filter(v => !v).length
+                : 0
+
               return (
                 <button key={t.id} onClick={() => router.push(`/tramites/${t.id}`)} style={{
                   background: DARK2, borderRadius: 14,
-                  border: `1.5px solid ${vencido ? 'rgba(248,113,113,0.3)' : BORDER}`,
+                  border: `1.5px solid ${esVencido ? 'rgba(248,113,113,0.3)' : BORDER}`,
                   padding: 14, textAlign: 'left', width: '100%'
                 }}>
-                  {/* CATASTRO: parcelaria primero */}
-                  {esCatastro && t.n_parcelaria && (
-                    <div style={{ marginBottom: 6 }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: TEAL, background: 'rgba(45,212,176,0.12)', padding: '2px 10px', borderRadius: 20 }}>
-                        Parcelaria {t.n_parcelaria}
-                      </span>
-                    </div>
-                  )}
-                  {/* OBRAS: expediente primero */}
-                  {esObras && t.n_expediente && (
-                    <div style={{ marginBottom: 6 }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: TEAL, background: 'rgba(45,212,176,0.12)', padding: '2px 10px', borderRadius: 20 }}>
-                        Exp: {t.n_expediente}
-                      </span>
-                    </div>
-                  )}
-                  {/* NOMBRE Y NÚMERO */}
+                  {/* Número + nombre */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    {!esCatastro && !esObras && t.numero_p && (
+                    {t.numero_p && (
                       <span style={{ fontSize: 12, fontWeight: 700, color: TEAL }}>{t.numero_p}</span>
                     )}
                     <p style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#fff' }}>{t.nombre}</p>
                   </div>
-                  <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', margin: '0 0 8px' }}>
+
+                  {/* Domicilio + tipo */}
+                  <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', margin: '0 0 6px' }}>
                     {t.domicilio && `${t.domicilio} · `}{t.tramite}
                   </p>
-                  {t.ultima_nota && (
-                    <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', margin: '0 0 8px', fontStyle: 'italic' }}>"{t.ultima_nota}"</p>
+
+                  {/* Parcelaria / Expediente si corresponde */}
+                  {t.n_parcelaria && (
+                    <span style={{ fontSize: 11, color: TEAL, marginRight: 8 }}>📍 {t.n_parcelaria}</span>
                   )}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <div style={{ width: 7, height: 7, borderRadius: '50%', background: responsableColor(t.pelota) }} />
-                      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>{responsableLabel(t.pelota)}</span>
-                    </div>
-                    {t.dibujante && <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>· {t.dibujante}</span>}
-                    {esCatastro && t.numero_p && <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>· {t.numero_p}</span>}
-                    {esObras && t.numero_p && <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>· {t.numero_p}</span>}
-                    {vencido && <span style={{ fontSize: 11, color: '#f87171', marginLeft: 'auto' }}>⚠ {dias}d sin mover</span>}
+                  {t.n_expediente && (
+                    <span style={{ fontSize: 11, color: TEAL }}>📁 {t.n_expediente}</span>
+                  )}
+
+                  {/* Última nota */}
+                  {t.ultima_nota && (
+                    <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', margin: '6px 0 0', fontStyle: 'italic' }}>
+                      "{t.ultima_nota}"
+                    </p>
+                  )}
+
+                  {/* Footer */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+                    {t.dibujante && (
+                      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>✏️ {t.dibujante}</span>
+                    )}
+                    {checkPendientes > 0 && (
+                      <span style={{ fontSize: 11, color: '#fbbf24' }}>☐ {checkPendientes} pte{checkPendientes > 1 ? 's' : ''}</span>
+                    )}
+                    {esVencido && (
+                      <span style={{ fontSize: 11, color: '#f87171', marginLeft: 'auto' }}>⚠ {dias}d sin mover</span>
+                    )}
                   </div>
                 </button>
               )
@@ -159,6 +214,68 @@ export default function Tramites() {
     )
   }
 
+  // ── VISTA SUBESTADOS ─────────────────────────────────────────
+  if (vista === 'subestados') {
+    const totalResponsable = porResponsable(responsableFiltro!).length
+
+    return (
+      <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem' }}>
+          <button onClick={volver} style={{
+            width: 32, height: 32, background: 'rgba(255,255,255,0.06)',
+            border: `1.5px solid ${BORDER}`, borderRadius: 8, color: 'rgba(255,255,255,0.6)', fontSize: 16
+          }}>←</button>
+          <div>
+            <p style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>
+              {responsableActual?.icon} {responsableActual?.label}
+            </p>
+            <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: 0 }}>{totalResponsable} expedientes</p>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gap: 10 }}>
+          {subestados.map(sub => {
+            const items = porSubestado(responsableFiltro!, sub.key)
+            const v = vencidos(items)
+            return (
+              <button key={sub.key} onClick={() => irASubestado(sub.key)} style={{
+                background: DARK2, borderRadius: 14, width: '100%',
+                border: `1.5px solid ${v > 0 ? 'rgba(248,113,113,0.3)' : BORDER}`,
+                padding: '14px 16px', textAlign: 'left',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 22 }}>{sub.icon}</span>
+                  <div>
+                    <p style={{ fontSize: 15, fontWeight: 700, margin: 0, color: '#fff' }}>{sub.label}</p>
+                    <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', margin: 0 }}>
+                      {items.length} expediente{items.length !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {v > 0 && (
+                    <span style={{ fontSize: 11, color: '#f87171', fontWeight: 700 }}>⚠ {v}</span>
+                  )}
+                  <span style={{
+                    fontSize: 13, fontWeight: 700,
+                    background: items.length > 0 ? 'rgba(251,191,36,0.15)' : 'rgba(74,222,128,0.15)',
+                    color: items.length > 0 ? '#fbbf24' : '#4ade80',
+                    padding: '3px 10px', borderRadius: 20
+                  }}>
+                    {items.length > 0 ? items.length : '✓'}
+                  </span>
+                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 16 }}>→</span>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  // ── VISTA BLOQUES PRINCIPAL ──────────────────────────────────
   return (
     <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem' }}>
@@ -176,31 +293,33 @@ export default function Tramites() {
         <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)', marginTop: 60 }}>Cargando...</div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
-          {ETAPAS.map(etapa => {
-            const items = porEtapa(etapa.key)
-            const vencidos = items.filter(t => diasSinMover(t.ultima_accion_at) > 7 && t.pelota !== 'municipio').length
+          {RESPONSABLES.map(resp => {
+            const items = porResponsable(resp.key)
+            const v = vencidos(items)
             return (
-              <button key={etapa.key} onClick={() => setEtapaFiltro(etapa.key)} style={{
+              <button key={resp.key} onClick={() => irAResponsable(resp.key)} style={{
                 background: DARK2, borderRadius: 14, width: '100%',
-                border: `1.5px solid ${vencidos > 0 ? 'rgba(248,113,113,0.3)' : BORDER}`,
+                border: `1.5px solid ${v > 0 ? 'rgba(248,113,113,0.3)' : BORDER}`,
                 padding: 14, textAlign: 'left'
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                   <div style={{
-                    width: 36, height: 36, background: `${etapa.color}22`,
+                    width: 36, height: 36, background: `${resp.color}22`,
                     borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20
-                  }}>{etapa.icon}</div>
+                  }}>{resp.icon}</div>
                   <span style={{
                     fontSize: 11, fontWeight: 700,
-                    background: vencidos > 0 ? 'rgba(248,113,113,0.15)' : items.length > 0 ? 'rgba(251,191,36,0.15)' : 'rgba(74,222,128,0.15)',
-                    color: vencidos > 0 ? '#f87171' : items.length > 0 ? '#fbbf24' : '#4ade80',
+                    background: v > 0 ? 'rgba(248,113,113,0.15)' : items.length > 0 ? 'rgba(251,191,36,0.15)' : 'rgba(74,222,128,0.15)',
+                    color: v > 0 ? '#f87171' : items.length > 0 ? '#fbbf24' : '#4ade80',
                     padding: '3px 9px', borderRadius: 20
                   }}>
-                    {vencidos > 0 ? `⚠ ${vencidos} vencida` : items.length > 0 ? `${items.length} activos` : 'al día'}
+                    {v > 0 ? `⚠ ${v}` : items.length > 0 ? items.length : '✓'}
                   </span>
                 </div>
-                <p style={{ fontSize: 15, fontWeight: 700, margin: '0 0 4px', color: etapa.key === 'en_pausa' ? 'rgba(255,255,255,0.4)' : '#fff' }}>{etapa.label}</p>
-                <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', margin: 0, fontWeight: 600 }}>{items.length} expedientes →</p>
+                <p style={{ fontSize: 15, fontWeight: 700, margin: '0 0 4px', color: '#fff' }}>{resp.label}</p>
+                <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', margin: 0, fontWeight: 600 }}>
+                  {items.length} expediente{items.length !== 1 ? 's' : ''} →
+                </p>
               </button>
             )
           })}
