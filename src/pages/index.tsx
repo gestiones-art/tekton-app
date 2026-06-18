@@ -21,6 +21,16 @@ type Tramite = {
   n_expediente: string
 }
 
+type Consulta = {
+  id: string
+  numero_p: string
+  nombre: string
+  municipio: string
+  tramite: string
+  estado: string
+  created_at: string
+}
+
 const RESPONSABLES = [
   { key: 'admin', label: 'Ptes. Adm/Comercial', color: '#3b82f6', icon: '🔵' },
   { key: 'tecnica', label: 'Ptes. Técnica', color: '#f97316', icon: '🟠' },
@@ -47,8 +57,7 @@ const ESTADO_LABEL: Record<string, string> = {
 export default function Home() {
   const router = useRouter()
   const [tramites, setTramites] = useState<Tramite[]>([])
-  const [consultas_pte, setConsultasPte] = useState(0)
-  const [presupuestos_pte, setPresupuestosPte] = useState(0)
+  const [consultas, setConsultas] = useState<Consulta[]>([])
   const [loading, setLoading] = useState(true)
   const [busqueda, setBusqueda] = useState('')
   const [resultados, setResultados] = useState<Tramite[]>([])
@@ -84,25 +93,25 @@ export default function Home() {
       .not('estado_actual', 'eq', 'finalizado')
       .order('ultima_accion_at', { ascending: true })
 
-    const { data: consultas } = await supabase
+    const { data: cons } = await supabase
       .from('consultas')
-      .select('id')
-      .eq('estado', 'pendiente_validacion')
-
-    const { data: presupuestos } = await supabase
-      .from('presupuestos')
-      .select('id')
-      .eq('estado', 'enviado')
+      .select('id, numero_p, nombre, municipio, tramite, estado, created_at')
+      .in('estado', ['pendiente', 'pendiente_validacion', 'pdte_enviar', 'enviado'])
 
     setTramites(tr || [])
-    setConsultasPte(consultas?.length || 0)
-    setPresupuestosPte(presupuestos?.length || 0)
+    setConsultas(cons || [])
     setLoading(false)
   }
 
   const porResponsable = (key: string) => tramites.filter(t => t.pelota === key)
-
   const diasSinMover = (fecha: string) => Math.floor((Date.now() - new Date(fecha).getTime()) / (1000 * 60 * 60 * 24))
+
+  // Consultas que van al bloque de admin (pdte_enviar) o tecnica (pendiente)
+  const consultasPorResponsable = (key: string) => {
+    if (key === 'tecnica') return consultas.filter(c => c.estado === 'pendiente' || c.estado === 'pendiente_validacion')
+    if (key === 'admin') return consultas.filter(c => c.estado === 'pdte_enviar' || c.estado === 'enviado')
+    return []
+  }
 
   return (
     <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem' }}>
@@ -155,26 +164,13 @@ export default function Home() {
           <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)', marginTop: 60 }}>Cargando...</div>
         ) : (
           <>
-            {/* CONSULTAS Y PRESUPUESTOS */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
-              <button onClick={() => router.push('/validar')} style={{ background: DARK2, borderRadius: 14, border: `1.5px solid ${consultas_pte > 0 ? 'rgba(248,113,113,0.3)' : BORDER}`, padding: 14, textAlign: 'left' }}>
-                <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 2px', color: '#fff' }}>🔍 Validar</p>
-                <p style={{ fontSize: 22, fontWeight: 800, margin: '0 0 2px', color: consultas_pte > 0 ? '#f87171' : '#4ade80' }}>{consultas_pte}</p>
-                <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>consultas ptes.</p>
-              </button>
-              <button onClick={() => router.push('/presupuestos')} style={{ background: DARK2, borderRadius: 14, border: `1.5px solid ${presupuestos_pte > 0 ? 'rgba(251,191,36,0.3)' : BORDER}`, padding: 14, textAlign: 'left' }}>
-                <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 2px', color: '#fff' }}>📄 Presupuestos</p>
-                <p style={{ fontSize: 22, fontWeight: 800, margin: '0 0 2px', color: presupuestos_pte > 0 ? '#fbbf24' : '#4ade80' }}>{presupuestos_pte}</p>
-                <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>enviados sin resp.</p>
-              </button>
-            </div>
-
-            {/* BLOQUES POR RESPONSABLE */}
             <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', margin: '0 0 10px' }}>Trámites en curso</p>
             <div style={{ display: 'grid', gap: 8, marginBottom: '1.5rem' }}>
               {RESPONSABLES.map(resp => {
-                const items = porResponsable(resp.key)
-                const vencidos = items.filter(t => diasSinMover(t.ultima_accion_at) > 7).length
+                const itemsTramites = porResponsable(resp.key)
+                const itemsConsultas = consultasPorResponsable(resp.key)
+                const totalItems = itemsTramites.length + itemsConsultas.length
+                const vencidos = itemsTramites.filter(t => diasSinMover(t.ultima_accion_at) > 7).length
                 const abierto = bloqueAbierto === resp.key
 
                 return (
@@ -188,37 +184,51 @@ export default function Home() {
                         <p style={{ fontSize: 14, fontWeight: 700, margin: 0, color: '#fff' }}>{resp.label}</p>
                         {vencidos > 0 && <p style={{ fontSize: 11, color: '#f87171', margin: 0 }}>⚠ {vencidos} sin mover hace +7 días</p>}
                       </div>
-                      <span style={{
-                        fontSize: 20, fontWeight: 800,
-                        color: items.length > 0 ? resp.color : 'rgba(255,255,255,0.2)'
-                      }}>{items.length}</span>
+                      <span style={{ fontSize: 20, fontWeight: 800, color: totalItems > 0 ? resp.color : 'rgba(255,255,255,0.2)' }}>{totalItems}</span>
                       <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.3)' }}>{abierto ? '↑' : '↓'}</span>
                     </button>
 
                     {abierto && (
                       <div style={{ borderTop: `1px solid ${BORDER}` }}>
-                        {items.length === 0 ? (
+                        {totalItems === 0 ? (
                           <p style={{ padding: '12px 16px', fontSize: 13, color: 'rgba(255,255,255,0.3)', margin: 0 }}>Sin pendientes ✓</p>
                         ) : (
-                          items.map(t => {
-                            const dias = diasSinMover(t.ultima_accion_at)
-                            return (
-                              <button key={t.id} onClick={() => router.push(`/tramites/${t.id}`)} style={{
+                          <>
+                            {/* Consultas pendientes */}
+                            {itemsConsultas.map(c => (
+                              <button key={c.id} onClick={() => router.push(`/consultas/${c.id}`)} style={{
                                 width: '100%', padding: '12px 16px', textAlign: 'left',
-                                background: 'transparent', border: 'none', borderBottom: `1px solid ${BORDER}`
+                                background: 'rgba(251,191,36,0.05)', border: 'none', borderBottom: `1px solid ${BORDER}`
                               }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                                  <span style={{ fontSize: 11, fontWeight: 700, color: TEAL }}>{t.numero_p}</span>
-                                  <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{t.nombre}</span>
+                                  <span style={{ fontSize: 10, fontWeight: 700, color: '#fbbf24', background: 'rgba(251,191,36,0.15)', padding: '1px 6px', borderRadius: 10 }}>CONSULTA</span>
+                                  <span style={{ fontSize: 12, fontWeight: 700, color: TEAL }}>{c.numero_p}</span>
+                                  <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{c.nombre}</span>
                                 </div>
-                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const, alignItems: 'center' }}>
-                                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>{ESTADO_LABEL[t.estado_actual] || t.estado_actual?.replace(/_/g, ' ')}</span>
-                                  {t.ultima_nota && <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', fontStyle: 'italic' }}>· "{t.ultima_nota}"</span>}
-                                  {dias > 7 && <span style={{ fontSize: 10, color: '#f87171', marginLeft: 'auto' }}>⚠ {dias}d</span>}
-                                </div>
+                                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>{c.tramite} · {c.municipio}</span>
                               </button>
-                            )
-                          })
+                            ))}
+                            {/* Trámites */}
+                            {itemsTramites.map(t => {
+                              const dias = diasSinMover(t.ultima_accion_at)
+                              return (
+                                <button key={t.id} onClick={() => router.push(`/tramites/${t.id}`)} style={{
+                                  width: '100%', padding: '12px 16px', textAlign: 'left',
+                                  background: 'transparent', border: 'none', borderBottom: `1px solid ${BORDER}`
+                                }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                                    <span style={{ fontSize: 12, fontWeight: 700, color: TEAL }}>{t.numero_p}</span>
+                                    <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{t.nombre}</span>
+                                  </div>
+                                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const, alignItems: 'center' }}>
+                                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>{ESTADO_LABEL[t.estado_actual] || t.estado_actual?.replace(/_/g, ' ')}</span>
+                                    {t.ultima_nota && <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', fontStyle: 'italic' }}>· "{t.ultima_nota}"</span>}
+                                    {dias > 7 && <span style={{ fontSize: 10, color: '#f87171', marginLeft: 'auto' }}>⚠ {dias}d</span>}
+                                  </div>
+                                </button>
+                              )
+                            })}
+                          </>
                         )}
                       </div>
                     )}
@@ -229,9 +239,17 @@ export default function Home() {
 
             {/* ACCESOS RAPIDOS */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
+              <button onClick={() => router.push('/consultas')} style={{ background: DARK2, borderRadius: 12, border: `1.5px solid ${BORDER}`, padding: 12, textAlign: 'left' }}>
+                <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 2px', color: '#fff' }}>📋 Consultas</p>
+                <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>{consultas.length} activas</p>
+              </button>
               <button onClick={() => router.push('/tramites')} style={{ background: DARK2, borderRadius: 12, border: `1.5px solid ${BORDER}`, padding: 12, textAlign: 'left' }}>
-                <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 2px', color: '#fff' }}>📋 Todos los trámites</p>
+                <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 2px', color: '#fff' }}>📁 Trámites</p>
                 <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>{tramites.length} activos</p>
+              </button>
+              <button onClick={() => router.push('/presupuestos')} style={{ background: DARK2, borderRadius: 12, border: `1.5px solid ${BORDER}`, padding: 12, textAlign: 'left' }}>
+                <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 2px', color: '#fff' }}>📄 Presupuestos</p>
+                <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>Ver todos</p>
               </button>
               <button onClick={() => router.push('/cobranza')} style={{ background: DARK2, borderRadius: 12, border: `1.5px solid ${BORDER}`, padding: 12, textAlign: 'left' }}>
                 <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 2px', color: '#fff' }}>💰 Cobranza</p>
