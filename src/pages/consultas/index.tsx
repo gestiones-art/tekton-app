@@ -55,8 +55,8 @@ export default function Consultas() {
   const pdteEnviar = consultas.filter(c => c.estado === 'pdte_enviar').length
 
   return (
-    <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem' }}>
+    <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem', width: '100%', maxWidth: 480 }}>
         <button onClick={() => router.push('/')} style={{ width: 32, height: 32, background: 'rgba(255,255,255,0.06)', border: `1.5px solid ${BORDER}`, borderRadius: 8, color: 'rgba(255,255,255,0.6)', fontSize: 16 }}>←</button>
         <div>
           <p style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>Consultas / Presupuestos</p>
@@ -68,7 +68,7 @@ export default function Consultas() {
         <button onClick={() => router.push('/consultas/nueva')} style={{ marginLeft: 'auto', fontSize: 12, padding: '6px 12px', borderRadius: 20, background: TEAL, color: '#1a2332', border: 'none', fontWeight: 600 }}>+ Nueva</button>
       </div>
 
-      <div style={{ display: 'flex', gap: 6, marginBottom: 14, overflowX: 'auto', paddingBottom: 4 }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 14, overflowX: 'auto', paddingBottom: 4, width: '100%', maxWidth: 480 }}>
         {[
           { key: 'activos', label: 'Activos' },
           { key: 'aceptados', label: 'Aceptados' },
@@ -92,7 +92,7 @@ export default function Consultas() {
           <p>No hay consultas</p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gap: 10 }}>
+        <div style={{ display: 'grid', gap: 10, width: '100%', maxWidth: 480 }}>
           {filtrados.map(c => {
             const est = ESTADOS[c.estado] || ESTADOS.pendiente
             return (
