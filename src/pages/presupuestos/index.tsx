@@ -59,8 +59,8 @@ export default function Presupuestos() {
   }).length
 
   return (
-    <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem' }}>
+    <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem', width: '100%', maxWidth: 480 }}>
         <button onClick={() => router.push('/')} style={{
           width: 32, height: 32, background: 'rgba(255,255,255,0.06)',
           border: `1.5px solid ${BORDER}`, borderRadius: 8, color: 'rgba(255,255,255,0.6)', fontSize: 16
@@ -73,7 +73,7 @@ export default function Presupuestos() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 6, marginBottom: 14, overflowX: 'auto', paddingBottom: 4 }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 14, overflowX: 'auto', paddingBottom: 4, width: '100%', maxWidth: 480 }}>
         {[
           { key: 'activos', label: 'Activos' },
           { key: 'aceptados', label: 'Aceptados' },
@@ -97,7 +97,7 @@ export default function Presupuestos() {
           <p>No hay presupuestos</p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gap: 10 }}>
+        <div style={{ display: 'grid', gap: 10, width: '100%', maxWidth: 480 }}>
           {filtrados.map(p => {
             const est = ESTADOS[p.estado] || ESTADOS.borrador
             const diasEnviado = p.enviado_at ? Math.floor((Date.now() - new Date(p.enviado_at).getTime()) / (1000 * 60 * 60 * 24)) : 0
