@@ -6,6 +6,12 @@ const TEAL = '#2dd4b0'
 const DARK2 = '#243044'
 const BORDER = 'rgba(255,255,255,0.08)'
 
+// pelota vieja → responsable nuevo
+const PELOTA_MAP: Record<string, string> = {
+  dibujante: 'tecnica',
+}
+
+// estado_actual viejo → subestado nuevo
 const ESTADO_MAP: Record<string, string> = {
   en_dibujo: 'dibujo',
   observado_catastro: 'correc_catastro',
@@ -78,17 +84,21 @@ export default function Tramites() {
     setLoading(false)
   }
 
+  // Normaliza pelota: dibujante (dato viejo) → tecnica
+  const responsableNorm = (t: Tramite) => PELOTA_MAP[t.pelota] || t.pelota
+
+  // Normaliza estado_actual: si viene valor viejo, lo mapea al nuevo
   const estadoNorm = (t: Tramite) => ESTADO_MAP[t.estado_actual] || t.estado_actual
 
-  const porResponsable = (key: string) => tramites.filter(t => t.pelota === key)
+  const porResponsable = (key: string) => tramites.filter(t => responsableNorm(t) === key)
   const porSubestado = (responsable: string, sub: string) =>
-    tramites.filter(t => t.pelota === responsable && estadoNorm(t) === sub)
+    tramites.filter(t => responsableNorm(t) === responsable && estadoNorm(t) === sub)
 
   const diasSinMover = (fecha: string) =>
     Math.floor((Date.now() - new Date(fecha).getTime()) / (1000 * 60 * 60 * 24))
 
   const vencidos = (items: Tramite[]) =>
-    items.filter(t => diasSinMover(t.ultima_accion_at) > 7 && t.pelota !== 'municipio').length
+    items.filter(t => diasSinMover(t.ultima_accion_at) > 7 && responsableNorm(t) !== 'municipio').length
 
   function irAResponsable(key: string) {
     setResponsableFiltro(key)
@@ -152,7 +162,7 @@ export default function Tramites() {
           <div style={{ display: 'grid', gap: 10, width: '100%', maxWidth: 480 }}>
             {itemsLista.map(t => {
               const dias = diasSinMover(t.ultima_accion_at)
-              const esVencido = dias > 7 && t.pelota !== 'municipio'
+              const esVencido = dias > 7 && responsableNorm(t) !== 'municipio'
               const checkPendientes = t.checklist
                 ? Object.values(t.checklist).filter(v => !v).length
                 : 0
