@@ -34,10 +34,14 @@ type Consulta = {
 const RESPONSABLES = [
   { key: 'admin', label: 'Ptes. Adm/Comercial', color: '#3b82f6', icon: '🔵' },
   { key: 'tecnica', label: 'Ptes. Técnica', color: '#f97316', icon: '🟠' },
-  { key: 'dibujante', label: 'Ptes. Dibujante', color: '#fbbf24', icon: '🟡' },
   { key: 'municipio', label: 'En Municipio', color: TEAL, icon: '🟢' },
   { key: 'cliente', label: 'En Cliente', color: '#a78bfa', icon: '🟣' },
 ]
+
+// pelota vieja → responsable nuevo (compatibilidad con datos existentes)
+const PELOTA_MAP: Record<string, string> = {
+  dibujante: 'tecnica',
+}
 
 const ESTADO_LABEL: Record<string, string> = {
   en_dibujo: '✏️ En dibujo',
@@ -103,10 +107,12 @@ export default function Home() {
     setLoading(false)
   }
 
-  const porResponsable = (key: string) => tramites.filter(t => t.pelota === key)
+  // Normaliza pelota: dibujante (dato viejo) → tecnica
+  const responsableNorm = (t: Tramite) => PELOTA_MAP[t.pelota] || t.pelota
+
+  const porResponsable = (key: string) => tramites.filter(t => responsableNorm(t) === key)
   const diasSinMover = (fecha: string) => Math.floor((Date.now() - new Date(fecha).getTime()) / (1000 * 60 * 60 * 24))
 
-  // Consultas que van al bloque de admin (pdte_enviar) o tecnica (pendiente)
   const consultasPorResponsable = (key: string) => {
     if (key === 'tecnica') return consultas.filter(c => c.estado === 'pendiente' || c.estado === 'pendiente_validacion')
     if (key === 'admin') return consultas.filter(c => c.estado === 'pdte_enviar' || c.estado === 'enviado')
@@ -194,7 +200,6 @@ export default function Home() {
                           <p style={{ padding: '12px 16px', fontSize: 13, color: 'rgba(255,255,255,0.3)', margin: 0 }}>Sin pendientes ✓</p>
                         ) : (
                           <>
-                            {/* Consultas pendientes */}
                             {itemsConsultas.map(c => (
                               <button key={c.id} onClick={() => router.push(`/consultas/${c.id}`)} style={{
                                 width: '100%', padding: '12px 16px', textAlign: 'left',
@@ -208,7 +213,6 @@ export default function Home() {
                                 <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>{c.tramite} · {c.municipio}</span>
                               </button>
                             ))}
-                            {/* Trámites */}
                             {itemsTramites.map(t => {
                               const dias = diasSinMover(t.ultima_accion_at)
                               return (
