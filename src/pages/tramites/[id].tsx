@@ -95,7 +95,8 @@ export default function TramiteDetalle() {
     const { data } = await supabase.from('tramites').select('*').eq('id', id).single()
     if (data) {
       setTramite(data)
-      setNuevoResponsable(data.pelota || 'admin')
+     const PELOTA_MAP: Record<string, string> = { dibujante: 'tecnica' }
+setNuevoResponsable(PELOTA_MAP[data.pelota] || data.pelota || 'admin')
       setEditN({
         parcelaria: data.n_parcelaria || '',
         expediente: data.n_expediente || '',
