@@ -38,7 +38,6 @@ const RESPONSABLES = [
   { key: 'cliente', label: 'En Cliente', color: '#a78bfa', icon: '🟣' },
 ]
 
-// pelota vieja → responsable nuevo (compatibilidad con datos existentes)
 const PELOTA_MAP: Record<string, string> = {
   dibujante: 'tecnica',
 }
@@ -107,9 +106,7 @@ export default function Home() {
     setLoading(false)
   }
 
-  // Normaliza pelota: dibujante (dato viejo) → tecnica
   const responsableNorm = (t: Tramite) => PELOTA_MAP[t.pelota] || t.pelota
-
   const porResponsable = (key: string) => tramites.filter(t => responsableNorm(t) === key)
   const diasSinMover = (fecha: string) => Math.floor((Date.now() - new Date(fecha).getTime()) / (1000 * 60 * 60 * 24))
 
@@ -250,10 +247,6 @@ export default function Home() {
               <button onClick={() => router.push('/tramites')} style={{ background: DARK2, borderRadius: 12, border: `1.5px solid ${BORDER}`, padding: 12, textAlign: 'left' }}>
                 <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 2px', color: '#fff' }}>📁 Trámites</p>
                 <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>{tramites.length} activos</p>
-              </button>
-              <button onClick={() => router.push('/presupuestos')} style={{ background: DARK2, borderRadius: 12, border: `1.5px solid ${BORDER}`, padding: 12, textAlign: 'left' }}>
-                <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 2px', color: '#fff' }}>📄 Presupuestos</p>
-                <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>Ver todos</p>
               </button>
               <button onClick={() => router.push('/cobranza')} style={{ background: DARK2, borderRadius: 12, border: `1.5px solid ${BORDER}`, padding: 12, textAlign: 'left' }}>
                 <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 2px', color: '#fff' }}>💰 Cobranza</p>
