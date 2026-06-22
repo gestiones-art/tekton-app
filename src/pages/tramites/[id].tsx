@@ -41,6 +41,8 @@ const ESTADO_MAP: Record<string, string> = {
   en_pausa: 'otros',
 }
 
+const PELOTA_MAP: Record<string, string> = { dibujante: 'tecnica' }
+
 type Tramite = {
   id: string
   numero_p: string
@@ -84,7 +86,11 @@ export default function TramiteDetalle() {
   const [nuevaNota, setNuevaNota] = useState('')
   const [nuevoLink, setNuevoLink] = useState('')
   const [dibujante_custom, setDibujanteCustom] = useState('')
-  const [editN, setEditN] = useState({ parcelaria: '', expediente: '', dibujante: '', costo_dibujo: '', fecha_entrega: '' })
+  const [editN, setEditN] = useState({
+    parcelaria: '', expediente: '', dibujante: '',
+    costo_dibujo: '', fecha_entrega: '',
+    domicilio: '', celular: ''
+  })
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -95,14 +101,15 @@ export default function TramiteDetalle() {
     const { data } = await supabase.from('tramites').select('*').eq('id', id).single()
     if (data) {
       setTramite(data)
-     const PELOTA_MAP: Record<string, string> = { dibujante: 'tecnica' }
-setNuevoResponsable(PELOTA_MAP[data.pelota] || data.pelota || 'admin')
+      setNuevoResponsable(PELOTA_MAP[data.pelota] || data.pelota || 'admin')
       setEditN({
         parcelaria: data.n_parcelaria || '',
         expediente: data.n_expediente || '',
         dibujante: data.dibujante || '',
         costo_dibujo: data.costo_dibujo || '',
-        fecha_entrega: data.fecha_entrega_dibujo || ''
+        fecha_entrega: data.fecha_entrega_dibujo || '',
+        domicilio: data.domicilio || '',
+        celular: data.celular || ''
       })
     }
   }
@@ -141,6 +148,8 @@ setNuevoResponsable(PELOTA_MAP[data.pelota] || data.pelota || 'admin')
       dibujante: dibujanteFinal,
       costo_dibujo: editN.costo_dibujo ? parseFloat(editN.costo_dibujo) : null,
       fecha_entrega_dibujo: editN.fecha_entrega,
+      domicilio: editN.domicilio,
+      celular: editN.celular,
     }).eq('id', id)
     setSaving(false)
     setEditandoDatos(false)
@@ -216,6 +225,14 @@ setNuevoResponsable(PELOTA_MAP[data.pelota] || data.pelota || 'admin')
         {editandoDatos ? (
           <div style={{ display: 'grid', gap: 10 }}>
             <div>
+              <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Domicilio de obra</label>
+              <input value={editN.domicilio} onChange={e => setEditN(n => ({ ...n, domicilio: e.target.value }))} placeholder="Ej: Rivadavia 1234" />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Celular</label>
+              <input value={editN.celular} onChange={e => setEditN(n => ({ ...n, celular: e.target.value }))} placeholder="Ej: 1155556666" />
+            </div>
+            <div>
               <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Dibujante asignado</label>
               <select value={editN.dibujante} onChange={e => setEditN(n => ({ ...n, dibujante: e.target.value }))}>
                 <option value="">Sin asignar</option>
@@ -252,14 +269,14 @@ setNuevoResponsable(PELOTA_MAP[data.pelota] || data.pelota || 'admin')
           </div>
         ) : (
           <div>
+            <Fila label="Domicilio" value={tramite.domicilio || '—'} />
+            <Fila label="Celular" value={tramite.celular || '—'} />
             <Fila label="Dibujante" value={tramite.dibujante || '—'} />
             {tramite.costo_dibujo > 0 && <Fila label="Costo dibujo" value={`USD ${tramite.costo_dibujo}`} />}
             {tramite.fecha_entrega_dibujo && <Fila label="Entrega estimada" value={new Date(tramite.fecha_entrega_dibujo).toLocaleDateString('es-AR')} />}
             <Fila label="Parcelaria" value={tramite.n_parcelaria || '—'} />
             <Fila label="Exp. municipal" value={tramite.n_expediente || '—'} />
             <Fila label="Firma" value={tramite.firma || '—'} />
-            <Fila label="Domicilio" value={tramite.domicilio} />
-            <Fila label="Celular" value={tramite.celular} />
           </div>
         )}
       </div>
@@ -268,8 +285,6 @@ setNuevoResponsable(PELOTA_MAP[data.pelota] || data.pelota || 'admin')
       <div style={{ background: DARK2, borderRadius: 14, border: `1.5px solid ${BORDER}`, padding: 14, marginBottom: 12, width: '100%', maxWidth: 480 }}>
         <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.35)', letterSpacing: 1, textTransform: 'uppercase', margin: '0 0 12px' }}>Registrar movimiento</p>
         <div style={{ display: 'grid', gap: 10 }}>
-
-          {/* RESPONSABLE */}
           <div>
             <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 6 }}>Responsable</label>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -284,7 +299,6 @@ setNuevoResponsable(PELOTA_MAP[data.pelota] || data.pelota || 'admin')
             </div>
           </div>
 
-          {/* SUBESTADO — solo si es tecnica o municipio */}
           {subestadosActuales.length > 0 && (
             <div>
               <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 6 }}>Subestado</label>
@@ -301,13 +315,11 @@ setNuevoResponsable(PELOTA_MAP[data.pelota] || data.pelota || 'admin')
             </div>
           )}
 
-          {/* NOTA */}
           <div>
             <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Nota</label>
             <textarea value={nuevaNota} onChange={e => setNuevaNota(e.target.value)} placeholder="Ej: Catastro mandó correcciones del plano..." style={{ minHeight: 56, resize: 'vertical' }} />
           </div>
 
-          {/* LINK */}
           <div>
             <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>🔗 Link Dropbox / Drive (opcional)</label>
             <input value={nuevoLink} onChange={e => setNuevoLink(e.target.value)} placeholder="https://www.dropbox.com/..." />
@@ -357,7 +369,6 @@ setNuevoResponsable(PELOTA_MAP[data.pelota] || data.pelota || 'admin')
           </div>
         )}
       </div>
-
     </div>
   )
 }
