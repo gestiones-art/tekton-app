@@ -252,6 +252,10 @@ export default function Home() {
                 <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 2px', color: '#fff' }}>💰 Cobranza</p>
                 <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>Saldos pendientes</p>
               </button>
+              <button onClick={() => router.push('/exportar')} style={{ background: DARK2, borderRadius: 12, border: `1.5px solid ${BORDER}`, padding: 12, textAlign: 'left' }}>
+  <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 2px', color: '#fff' }}>⬇ Exportar</p>
+  <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>Backup en Excel</p>
+</button>
             </div>
 
             <button onClick={() => router.push('/consultas/nueva')} style={{
