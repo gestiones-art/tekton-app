@@ -43,6 +43,13 @@ const ESTADO_MAP: Record<string, string> = {
 
 const PELOTA_MAP: Record<string, string> = { dibujante: 'tecnica' }
 
+const TAREAS_FINALES = [
+  { key: 'derechos_pagados', label: 'Derechos pagados' },
+  { key: 'estructura_lista', label: 'Estructura lista' },
+  { key: 'colegio_listo', label: 'Colegio listo' },
+  { key: 'planilla_estadistica', label: 'Planilla de estadística' },
+]
+
 type Tramite = {
   id: string
   numero_p: string
@@ -156,6 +163,13 @@ export default function TramiteDetalle() {
     loadTramite()
   }
 
+  async function toggleChecklist(key: string) {
+    if (!tramite) return
+    const nuevoChecklist = { ...tramite.checklist, [key]: !tramite.checklist?.[key] }
+    await supabase.from('tramites').update({ checklist: nuevoChecklist }).eq('id', id)
+    loadTramite()
+  }
+
   const responsableColor = (p: string) => {
     const colors: Record<string, string> = { admin: '#3b82f6', tecnica: '#f97316', cliente: '#8b5cf6', municipio: TEAL }
     return colors[p] || '#888'
@@ -182,6 +196,8 @@ export default function TramiteDetalle() {
       Cargando...
     </div>
   )
+
+  const tareasCompletadas = TAREAS_FINALES.filter(t => tramite.checklist?.[t.key]).length
 
   return (
     <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -278,45 +294,42 @@ export default function TramiteDetalle() {
             <Fila label="Exp. municipal" value={tramite.n_expediente || '—'} />
             <Fila label="Firma" value={tramite.firma || '—'} />
           </div>
-      {/* TAREAS FINALES */}
-<div style={{ background: DARK2, borderRadius: 14, border: `1.5px solid ${BORDER}`, padding: 14, marginBottom: 12, width: '100%', maxWidth: 480 }}>
-  <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.35)', letterSpacing: 1, textTransform: 'uppercase', margin: '0 0 12px' }}>Tareas finales</p>
-  <div style={{ display: 'grid', gap: 10 }}>
-    {[
-      { key: 'derechos_pagados', label: 'Derechos pagados' },
-      { key: 'estructura_lista', label: 'Estructura lista' },
-      { key: 'colegio_listo', label: 'Colegio listo' },
-      { key: 'planilla_estadistica', label: 'Planilla de estadística' },
-    ].map(item => {
-      const checked = tramite.checklist?.[item.key] || false
-      return (
-        <button key={item.key} onClick={async () => {
-          const nuevoChecklist = { ...tramite.checklist, [item.key]: !checked }
-          await supabase.from('tramites').update({ checklist: nuevoChecklist }).eq('id', id)
-          loadTramite()
-        }} style={{
-          display: 'flex', alignItems: 'center', gap: 12,
-          background: checked ? 'rgba(74,222,128,0.08)' : 'rgba(255,255,255,0.03)',
-          border: `1.5px solid ${checked ? 'rgba(74,222,128,0.3)' : BORDER}`,
-          borderRadius: 10, padding: '10px 14px', textAlign: 'left', width: '100%'
-        }}>
-          <div style={{
-            width: 20, height: 20, borderRadius: 6, flexShrink: 0,
-            background: checked ? '#4ade80' : 'transparent',
-            border: `2px solid ${checked ? '#4ade80' : 'rgba(255,255,255,0.2)'}`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center'
-          }}>
-            {checked && <span style={{ fontSize: 12, color: '#1a2332', fontWeight: 700 }}>✓</span>}
-          </div>
-          <span style={{ fontSize: 14, color: checked ? '#4ade80' : 'rgba(255,255,255,0.7)', fontWeight: checked ? 600 : 400, textDecoration: checked ? 'line-through' : 'none' }}>
-            {item.label}
-          </span>
-        </button>
-      )
-    })}
-  </div>
-</div>
         )}
+      </div>
+
+      {/* TAREAS FINALES */}
+      <div style={{ background: DARK2, borderRadius: 14, border: `1.5px solid ${tareasCompletadas === TAREAS_FINALES.length ? 'rgba(74,222,128,0.3)' : BORDER}`, padding: 14, marginBottom: 12, width: '100%', maxWidth: 480 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.35)', letterSpacing: 1, textTransform: 'uppercase', margin: 0 }}>Tareas finales</p>
+          <span style={{ fontSize: 11, color: tareasCompletadas === TAREAS_FINALES.length ? '#4ade80' : 'rgba(255,255,255,0.35)' }}>
+            {tareasCompletadas}/{TAREAS_FINALES.length}
+          </span>
+        </div>
+        <div style={{ display: 'grid', gap: 8 }}>
+          {TAREAS_FINALES.map(item => {
+            const checked = tramite.checklist?.[item.key] || false
+            return (
+              <button key={item.key} onClick={() => toggleChecklist(item.key)} style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                background: checked ? 'rgba(74,222,128,0.08)' : 'rgba(255,255,255,0.03)',
+                border: `1.5px solid ${checked ? 'rgba(74,222,128,0.3)' : BORDER}`,
+                borderRadius: 10, padding: '10px 14px', textAlign: 'left', width: '100%'
+              }}>
+                <div style={{
+                  width: 20, height: 20, borderRadius: 6, flexShrink: 0,
+                  background: checked ? '#4ade80' : 'transparent',
+                  border: `2px solid ${checked ? '#4ade80' : 'rgba(255,255,255,0.2)'}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>
+                  {checked && <span style={{ fontSize: 12, color: '#1a2332', fontWeight: 700 }}>✓</span>}
+                </div>
+                <span style={{ fontSize: 14, color: checked ? '#4ade80' : 'rgba(255,255,255,0.7)', fontWeight: checked ? 600 : 400, textDecoration: checked ? 'line-through' : 'none' }}>
+                  {item.label}
+                </span>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {/* REGISTRAR MOVIMIENTO */}
