@@ -41,7 +41,6 @@ type Consulta = {
   archivos: string[]
   motivo_cancelacion: string
   motivo_rechazo: string
-  // Campos de presupuesto (ahora en consultas)
   monto_usd: number
   anticipo_usd: number
   segunda_cuota_usd: number
@@ -67,7 +66,8 @@ export default function ConsultaDetalle() {
   const [motivoRechazo, setMotivoRechazo] = useState('')
   const [formVal, setFormVal] = useState({
     ajusta_cou: '', obs_presupuesto: '',
-    derechos_estimados: '', aportes_estimados: '', info_faltante: ''
+    derechos_estimados: '', aportes_estimados: '',
+    info_faltante: '', firma: ''
   })
   const [modoValidar, setModoValidar] = useState(false)
   const [modoPresupuesto, setModoPresupuesto] = useState(false)
@@ -88,7 +88,8 @@ export default function ConsultaDetalle() {
         obs_presupuesto: data.obs_presupuesto || '',
         derechos_estimados: data.derechos_estimados || '',
         aportes_estimados: data.aportes_estimados || '',
-        info_faltante: data.info_faltante || ''
+        info_faltante: data.info_faltante || '',
+        firma: data.firma || ''
       })
       setFormPresu({
         monto_usd: data.monto_usd || '',
@@ -128,6 +129,7 @@ export default function ConsultaDetalle() {
       obs_presupuesto: formVal.obs_presupuesto,
       derechos_estimados: parseFloat(formVal.derechos_estimados) || 0,
       aportes_estimados: parseFloat(formVal.aportes_estimados) || 0,
+      firma: formVal.firma,
       info_faltante: ''
     }).eq('id', id)
     setSaving(false)
@@ -147,7 +149,8 @@ export default function ConsultaDetalle() {
     setSaving(true)
     await supabase.from('consultas').update({
       estado: 'pendiente',
-      info_faltante: formVal.info_faltante
+      info_faltante: formVal.info_faltante,
+      firma: formVal.firma,
     }).eq('id', id)
     setSaving(false)
     setModoValidar(false)
@@ -184,6 +187,7 @@ export default function ConsultaDetalle() {
         domicilio: consulta.domicilio,
         municipio: consulta.municipio,
         tramite: consulta.tramite,
+        firma: consulta.firma,
         estado_actual: 'dibujo',
         pelota: 'admin',
         ultima_nota: 'Trámite iniciado — presupuesto aceptado',
@@ -313,17 +317,18 @@ export default function ConsultaDetalle() {
         )}
 
         {/* INFO TÉCNICA */}
-        {consulta.obs_presupuesto && (
+        {(consulta.obs_presupuesto || consulta.firma) && (
           <div style={{ background: 'rgba(45,212,176,0.08)', borderRadius: 14, border: '1.5px solid rgba(45,212,176,0.2)', padding: 14 }}>
             <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(45,212,176,0.7)', letterSpacing: 1, textTransform: 'uppercase', margin: '0 0 10px' }}>Info técnica (Fer)</p>
+            {consulta.firma && <Campo label="Firma" value={consulta.firma} />}
             {consulta.ajusta_cou && <Campo label="Ajusta a COU" value={consulta.ajusta_cou} />}
-            {consulta.derechos_estimados > 0 && <Campo label="Derechos est." value={`USD ${consulta.derechos_estimados}`} />}
-            {consulta.aportes_estimados > 0 && <Campo label="Aportes est." value={`USD ${consulta.aportes_estimados}`} />}
-            <Campo label="Obs. para presupuesto" value={consulta.obs_presupuesto} />
+            {consulta.derechos_estimados > 0 && <Campo label="Derechos est." value={`$ ${consulta.derechos_estimados.toLocaleString('es-AR')}`} />}
+            {consulta.aportes_estimados > 0 && <Campo label="Aportes est." value={`$ ${consulta.aportes_estimados.toLocaleString('es-AR')}`} />}
+            {consulta.obs_presupuesto && <Campo label="Obs. para presupuesto" value={consulta.obs_presupuesto} />}
           </div>
         )}
 
-        {/* PRESUPUESTO — si ya tiene monto */}
+        {/* PRESUPUESTO */}
         {consulta.monto_usd > 0 && !modoPresupuesto && (
           <div style={{ background: 'rgba(45,212,176,0.08)', borderRadius: 14, border: '1.5px solid rgba(45,212,176,0.2)', padding: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -347,6 +352,14 @@ export default function ConsultaDetalle() {
             <p style={{ fontSize: 12, fontWeight: 700, color: TEAL, margin: '0 0 12px', textTransform: 'uppercase', letterSpacing: 1 }}>Validación técnica</p>
             <div style={{ display: 'grid', gap: 10 }}>
               <div>
+                <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>¿Requiere firma profesional?</label>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {['Firma del cliente', 'Firma de Fer', 'Sin firma', 'A confirmar'].map(op => (
+                    <button key={op} onClick={() => setVal('firma', op)} style={{ fontSize: 12, padding: '5px 10px', borderRadius: 20, border: `1.5px solid ${formVal.firma === op ? 'rgba(45,212,176,0.4)' : BORDER}`, background: formVal.firma === op ? 'rgba(45,212,176,0.15)' : 'transparent', color: formVal.firma === op ? TEAL : 'rgba(255,255,255,0.5)' }}>{op}</button>
+                  ))}
+                </div>
+              </div>
+              <div>
                 <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>¿Ajusta al COU?</label>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {['Sí', 'No', 'Con observaciones'].map(op => (
@@ -354,8 +367,8 @@ export default function ConsultaDetalle() {
                   ))}
                 </div>
               </div>
-              <div><label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Derechos estimados (USD)</label><input type="number" value={formVal.derechos_estimados} onChange={e => setVal('derechos_estimados', e.target.value)} placeholder="Ej: 500" /></div>
-              <div><label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Aportes estimados (USD)</label><input type="number" value={formVal.aportes_estimados} onChange={e => setVal('aportes_estimados', e.target.value)} placeholder="Ej: 300" /></div>
+              <div><label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Derechos estimados ($)</label><input type="number" value={formVal.derechos_estimados} onChange={e => setVal('derechos_estimados', e.target.value)} placeholder="Ej: 500000" /></div>
+              <div><label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Aportes estimados ($)</label><input type="number" value={formVal.aportes_estimados} onChange={e => setVal('aportes_estimados', e.target.value)} placeholder="Ej: 300000" /></div>
               <div><label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Observaciones para el presupuesto</label><textarea value={formVal.obs_presupuesto} onChange={e => setVal('obs_presupuesto', e.target.value)} placeholder="Info relevante para armar el presupuesto..." style={{ minHeight: 64 }} /></div>
               <div><label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Falta info (para devolver)</label><textarea value={formVal.info_faltante} onChange={e => setVal('info_faltante', e.target.value)} placeholder="Ej: falta plano antecedente..." style={{ minHeight: 48 }} /></div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
