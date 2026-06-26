@@ -135,8 +135,19 @@ export default function Exportar() {
       XLSX.utils.book_append_sheet(wb, wsCobros, 'Cobros')
 
       // ── DESCARGAR ──
-      const fecha = new Date().toLocaleDateString('es-AR').replace(/\//g, '-')
-      XLSX.writeFile(wb, `Tekton_backup_${fecha}.xlsx`)
+const fecha = new Date().toLocaleDateString('es-AR').replace(/\//g, '-')
+const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+const blob = new Blob([wbout], { type: 'application/octet-stream' })
+const url = URL.createObjectURL(blob)
+const a = document.createElement('a')
+a.href = url
+a.download = `Tekton_backup_${fecha}.xlsx`
+document.body.appendChild(a)
+a.click()
+document.body.removeChild(a)
+URL.revokeObjectURL(url)
+
+      
       setProgreso('¡Listo! Revisá tu carpeta de descargas.')
     } catch (err) {
       setProgreso('Error al exportar. Intentá de nuevo.')
