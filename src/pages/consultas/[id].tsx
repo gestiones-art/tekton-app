@@ -367,6 +367,27 @@ export default function ConsultaDetalle() {
                   ))}
                 </div>
               </div>
+              <div>
+  <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 6 }}>🔗 Links útiles</label>
+  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+    {consulta.municipio === 'San Isidro' && (
+      <a href="https://liquidacionesobras.gestionmsi.gob.ar/" target="_blank" rel="noreferrer" style={{ fontSize: 11, padding: '5px 10px', borderRadius: 20, border: '1.5px solid rgba(45,212,176,0.3)', color: TEAL, textDecoration: 'none', background: 'rgba(45,212,176,0.08)' }}>
+        🧮 Derechos SI
+      </a>
+    )}
+    <a href="https://share.google/970c90T5hTtlQlx3d" target="_blank" rel="noreferrer" style={{ fontSize: 11, padding: '5px 10px', borderRadius: 20, border: '1.5px solid rgba(45,212,176,0.3)', color: TEAL, textDecoration: 'none', background: 'rgba(45,212,176,0.08)' }}>
+      📊 Sigma
+    </a>
+    <a href="https://enlinea.capba.org.ar" target="_blank" rel="noreferrer" style={{ fontSize: 11, padding: '5px 10px', borderRadius: 20, border: '1.5px solid rgba(45,212,176,0.3)', color: TEAL, textDecoration: 'none', background: 'rgba(45,212,176,0.08)' }}>
+      🏛️ CAPBA
+    </a>
+    {consulta.municipio === 'San Isidro' && (
+      <a href="https://www.sanisidro.gob.ar/tramites-y-servicios/permiso-de-construcci%C3%B3n" target="_blank" rel="noreferrer" style={{ fontSize: 11, padding: '5px 10px', borderRadius: 20, border: '1.5px solid rgba(45,212,176,0.3)', color: TEAL, textDecoration: 'none', background: 'rgba(45,212,176,0.08)' }}>
+        📋 COU / Permiso SI
+      </a>
+    )}
+  </div>
+</div>
               <div><label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Derechos estimados ($)</label><input type="number" value={formVal.derechos_estimados} onChange={e => setVal('derechos_estimados', e.target.value)} placeholder="Ej: 500000" /></div>
               <div><label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Aportes estimados ($)</label><input type="number" value={formVal.aportes_estimados} onChange={e => setVal('aportes_estimados', e.target.value)} placeholder="Ej: 300000" /></div>
               <div><label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Observaciones para el presupuesto</label><textarea value={formVal.obs_presupuesto} onChange={e => setVal('obs_presupuesto', e.target.value)} placeholder="Info relevante para armar el presupuesto..." style={{ minHeight: 64 }} /></div>
