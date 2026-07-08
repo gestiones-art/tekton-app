@@ -125,13 +125,14 @@ export default function ConsultaDetalle() {
     if (data) setNotas(data)
   }
 
-  async function agregarNota() {
+async function agregarNota() {
     if (!nuevaNota.trim()) return
     setSavingNota(true)
-    await supabase.from('consulta_notas').insert({
+    const { error } = await supabase.from('consulta_notas').insert({
       consulta_id: id,
       nota: nuevaNota.trim(),
     })
+    if (error) alert('Error: ' + error.message)
     setNuevaNota('')
     setSavingNota(false)
     loadNotas()
