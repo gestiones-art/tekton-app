@@ -52,6 +52,13 @@ type Consulta = {
   enviado_at: string
 }
 
+type Nota = {
+  id: string
+  consulta_id: string
+  nota: string
+  created_at: string
+}
+
 export default function ConsultaDetalle() {
   const router = useRouter()
   const { id } = router.query
@@ -76,7 +83,12 @@ export default function ConsultaDetalle() {
     plazo_dias: '', descripcion_trabajo: '', no_incluye: '', vigencia_dias: '7'
   })
 
-  useEffect(() => { if (id) loadConsulta() }, [id])
+  // NOTAS / SEGUIMIENTO
+  const [notas, setNotas] = useState<Nota[]>([])
+  const [nuevaNota, setNuevaNota] = useState('')
+  const [savingNota, setSavingNota] = useState(false)
+
+  useEffect(() => { if (id) { loadConsulta(); loadNotas() } }, [id])
 
   async function loadConsulta() {
     const { data } = await supabase.from('consultas').select('*').eq('id', id).single()
@@ -102,6 +114,27 @@ export default function ConsultaDetalle() {
         vigencia_dias: data.vigencia_dias || '7'
       })
     }
+  }
+
+  async function loadNotas() {
+    const { data } = await supabase
+      .from('consulta_notas')
+      .select('*')
+      .eq('consulta_id', id)
+      .order('created_at', { ascending: false })
+    if (data) setNotas(data)
+  }
+
+  async function agregarNota() {
+    if (!nuevaNota.trim()) return
+    setSavingNota(true)
+    await supabase.from('consulta_notas').insert({
+      consulta_id: id,
+      nota: nuevaNota.trim(),
+    })
+    setNuevaNota('')
+    setSavingNota(false)
+    loadNotas()
   }
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
@@ -229,6 +262,12 @@ export default function ConsultaDetalle() {
     if (!consulta) return
     const msg = `Hola Fer! Nueva consulta para validar 👇\n*${consulta.numero_p} — ${consulta.nombre}*\n${consulta.tramite} · ${consulta.municipio}\n${consulta.domicilio ? consulta.domicilio + '\n' : ''}${consulta.observaciones ? 'Obs: ' + consulta.observaciones + '\n' : ''}\nVer acá: https://tekton-app-nuevo.vercel.app/consultas/${id}`
     window.location.href = `https://wa.me/${FER_PHONE}?text=${encodeURIComponent(msg)}`
+  }
+
+  function formatFecha(iso: string) {
+    const d = new Date(iso)
+    return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' }) +
+      ' ' + d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
   }
 
   if (!consulta) return (
@@ -368,26 +407,18 @@ export default function ConsultaDetalle() {
                 </div>
               </div>
               <div>
-  <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 6 }}>🔗 Links útiles</label>
-  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-    {consulta.municipio === 'San Isidro' && (
-      <a href="https://liquidacionesobras.gestionmsi.gob.ar/" target="_blank" rel="noreferrer" style={{ fontSize: 11, padding: '5px 10px', borderRadius: 20, border: '1.5px solid rgba(45,212,176,0.3)', color: TEAL, textDecoration: 'none', background: 'rgba(45,212,176,0.08)' }}>
-        🧮 Derechos SI
-      </a>
-    )}
-    <a href="https://share.google/970c90T5hTtlQlx3d" target="_blank" rel="noreferrer" style={{ fontSize: 11, padding: '5px 10px', borderRadius: 20, border: '1.5px solid rgba(45,212,176,0.3)', color: TEAL, textDecoration: 'none', background: 'rgba(45,212,176,0.08)' }}>
-      📊 Sigma
-    </a>
-    <a href="https://enlinea.capba.org.ar" target="_blank" rel="noreferrer" style={{ fontSize: 11, padding: '5px 10px', borderRadius: 20, border: '1.5px solid rgba(45,212,176,0.3)', color: TEAL, textDecoration: 'none', background: 'rgba(45,212,176,0.08)' }}>
-      🏛️ CAPBA
-    </a>
-    {consulta.municipio === 'San Isidro' && (
-      <a href="https://www.sanisidro.gob.ar/tramites-y-servicios/permiso-de-construcci%C3%B3n" target="_blank" rel="noreferrer" style={{ fontSize: 11, padding: '5px 10px', borderRadius: 20, border: '1.5px solid rgba(45,212,176,0.3)', color: TEAL, textDecoration: 'none', background: 'rgba(45,212,176,0.08)' }}>
-        📋 COU / Permiso SI
-      </a>
-    )}
-  </div>
-</div>
+                <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 6 }}>🔗 Links útiles</label>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {consulta.municipio === 'San Isidro' && (
+                    <a href="https://liquidacionesobras.gestionmsi.gob.ar/" target="_blank" rel="noreferrer" style={{ fontSize: 11, padding: '5px 10px', borderRadius: 20, border: '1.5px solid rgba(45,212,176,0.3)', color: TEAL, textDecoration: 'none', background: 'rgba(45,212,176,0.08)' }}>🧮 Derechos SI</a>
+                  )}
+                  <a href="https://share.google/970c90T5hTtlQlx3d" target="_blank" rel="noreferrer" style={{ fontSize: 11, padding: '5px 10px', borderRadius: 20, border: '1.5px solid rgba(45,212,176,0.3)', color: TEAL, textDecoration: 'none', background: 'rgba(45,212,176,0.08)' }}>📊 Sigma</a>
+                  <a href="https://enlinea.capba.org.ar" target="_blank" rel="noreferrer" style={{ fontSize: 11, padding: '5px 10px', borderRadius: 20, border: '1.5px solid rgba(45,212,176,0.3)', color: TEAL, textDecoration: 'none', background: 'rgba(45,212,176,0.08)' }}>🏛️ CAPBA</a>
+                  {consulta.municipio === 'San Isidro' && (
+                    <a href="https://www.sanisidro.gob.ar/tramites-y-servicios/permiso-de-construcci%C3%B3n" target="_blank" rel="noreferrer" style={{ fontSize: 11, padding: '5px 10px', borderRadius: 20, border: '1.5px solid rgba(45,212,176,0.3)', color: TEAL, textDecoration: 'none', background: 'rgba(45,212,176,0.08)' }}>📋 COU / Permiso SI</a>
+                  )}
+                </div>
+              </div>
               <div><label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Derechos estimados ($)</label><input type="number" value={formVal.derechos_estimados} onChange={e => setVal('derechos_estimados', e.target.value)} placeholder="Ej: 500000" /></div>
               <div><label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Aportes estimados ($)</label><input type="number" value={formVal.aportes_estimados} onChange={e => setVal('aportes_estimados', e.target.value)} placeholder="Ej: 300000" /></div>
               <div><label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Observaciones para el presupuesto</label><textarea value={formVal.obs_presupuesto} onChange={e => setVal('obs_presupuesto', e.target.value)} placeholder="Info relevante para armar el presupuesto..." style={{ minHeight: 64 }} /></div>
@@ -425,6 +456,65 @@ export default function ConsultaDetalle() {
             </div>
           </div>
         )}
+
+        {/* LOG DE NOTAS / SEGUIMIENTO */}
+        <div style={{ background: DARK2, borderRadius: 14, border: `1.5px solid ${BORDER}`, padding: 14 }}>
+          <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.35)', letterSpacing: 1, textTransform: 'uppercase', margin: '0 0 12px' }}>📋 Seguimiento</p>
+
+          {/* Input nueva nota */}
+          <div style={{ display: 'grid', gap: 8, marginBottom: notas.length > 0 ? 14 : 0 }}>
+            <textarea
+              value={nuevaNota}
+              onChange={e => setNuevaNota(e.target.value)}
+              placeholder="Ej: Le mandé WhatsApp, me dijo que se junta con los propietarios la semana que viene..."
+              style={{ minHeight: 72, fontSize: 13 }}
+            />
+            <button
+              onClick={agregarNota}
+              disabled={savingNota || !nuevaNota.trim()}
+              style={{
+                padding: '9px 0',
+                fontSize: 13,
+                fontWeight: 600,
+                background: nuevaNota.trim() ? TEAL : 'rgba(255,255,255,0.06)',
+                color: nuevaNota.trim() ? '#1a2332' : 'rgba(255,255,255,0.25)',
+                border: 'none',
+                borderRadius: 10,
+                cursor: nuevaNota.trim() ? 'pointer' : 'default',
+                transition: 'all 0.15s'
+              }}
+            >
+              {savingNota ? 'Guardando...' : '+ Agregar nota'}
+            </button>
+          </div>
+
+          {/* Historial de notas */}
+          {notas.length > 0 && (
+            <div style={{ display: 'grid', gap: 8 }}>
+              {notas.map((n, i) => (
+                <div key={n.id} style={{
+                  background: i === 0 ? 'rgba(45,212,176,0.06)' : 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${i === 0 ? 'rgba(45,212,176,0.15)' : BORDER}`,
+                  borderRadius: 10,
+                  padding: '10px 12px'
+                }}>
+                  <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', margin: '0 0 5px' }}>
+                    {formatFecha(n.created_at)}
+                  </p>
+                  <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', margin: 0, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                    {n.nota}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {notas.length === 0 && (
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.2)', margin: 0, textAlign: 'center', paddingTop: 4 }}>
+              Sin notas todavía
+            </p>
+          )}
+        </div>
 
         {/* ACCIONES */}
         {!editando && !modoValidar && !modoPresupuesto && (
