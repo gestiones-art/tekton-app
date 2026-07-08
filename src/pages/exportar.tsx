@@ -137,7 +137,7 @@ export default function Exportar() {
       // ── DESCARGAR ──
 const fecha = new Date().toLocaleDateString('es-AR').replace(/\//g, '-')
 const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
-const blob = new Blob([wbout], { type: 'application/octet-stream' })
+const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
 const url = URL.createObjectURL(blob)
 const a = document.createElement('a')
 a.href = url
