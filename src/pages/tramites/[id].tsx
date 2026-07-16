@@ -143,7 +143,7 @@ export default function TramiteDetalle() {
     }).eq('id', id)
     setNuevaNota(''); setNuevoSubestado(''); setNuevoLink('')
     setSaving(false)
-    loadTramite(); loadMovimientos()
+    await loadTramite(); await loadMovimientos()
   }
 
   async function guardarNumerosYDibujante() {
