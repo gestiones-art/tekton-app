@@ -142,8 +142,15 @@ export default function TramiteDetalle() {
       ultima_accion_at: new Date().toISOString(),
     }).eq('id', id)
     setNuevaNota(''); setNuevoSubestado(''); setNuevoLink('')
-    setSaving(false)
-    await loadTramite(); await loadMovimientos()
+setSaving(false)
+setTramite(prev => prev ? {
+  ...prev,
+  estado_actual: estadoFinal,
+  pelota: nuevoResponsable,
+  ultima_nota: nuevaNota,
+  ultima_accion_at: new Date().toISOString(),
+} : prev)
+loadMovimientos()
   }
 
   async function guardarNumerosYDibujante() {
