@@ -8,6 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@emailjs/browser": "^4.4.1",
     "next": "14.2.3",
     "react": "^18",
     "react-dom": "^18",
