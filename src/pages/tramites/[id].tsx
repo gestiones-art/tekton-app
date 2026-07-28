@@ -76,6 +76,8 @@ type Tramite = {
   costo_dibujo: number
   fecha_entrega_dibujo: string
   checklist: Record<string, boolean>
+  finalizado: boolean
+  finalizado_at: string
 }
 
 type Movimiento = {
@@ -107,6 +109,7 @@ export default function TramiteDetalle() {
   })
   const [saving, setSaving] = useState(false)
   const [notificacionPendiente, setNotificacionPendiente] = useState<null | 'tecnica' | 'admin'>(null)
+  const [showConfirmFinalizar, setShowConfirmFinalizar] = useState(false)
 
   useEffect(() => {
     if (id) { loadTramite(); loadMovimientos() }
@@ -152,7 +155,6 @@ export default function TramiteDetalle() {
       ultima_accion_at: new Date().toISOString(),
     }).eq('id', id)
 
-    // Actualizar estado local inmediatamente
     setTramite(prev => prev ? {
       ...prev,
       estado_actual: estadoFinal,
@@ -161,11 +163,9 @@ export default function TramiteDetalle() {
       ultima_accion_at: new Date().toISOString(),
     } : prev)
 
-    // Determinar si hay que notificar
     const pasaATecnica = nuevoResponsable === 'tecnica' && responsableAnterior !== 'tecnica'
     const pasaAAdmin = nuevoResponsable === 'admin' && responsableAnterior === 'tecnica'
 
-    // Enviar mail automático
     if (pasaATecnica || pasaAAdmin) {
       const asunto = pasaATecnica
         ? `Nuevo trámite para técnica — ${tramite?.numero_p} ${tramite?.nombre}`
@@ -176,17 +176,13 @@ export default function TramiteDetalle() {
 
       try {
         await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
-          asunto,
-          mensaje,
-          name: 'Tekton App',
-          email: 'gestiones@estudiotekton.com',
+          asunto, mensaje, name: 'Tekton App', email: 'gestiones@estudiotekton.com',
         }, EMAILJS_KEY)
       } catch (e) {
         console.error('Error enviando mail:', e)
       }
     }
 
-    // Mostrar botón de WhatsApp si corresponde
     if (pasaATecnica) setNotificacionPendiente('tecnica')
     else if (pasaAAdmin) setNotificacionPendiente('admin')
     else setNotificacionPendiente(null)
@@ -194,6 +190,38 @@ export default function TramiteDetalle() {
     setNuevaNota(''); setNuevoSubestado(''); setNuevoLink('')
     setSaving(false)
     loadMovimientos()
+  }
+
+  async function finalizarTramite() {
+    setSaving(true)
+    await supabase.from('tramites').update({
+      finalizado: true,
+      finalizado_at: new Date().toISOString(),
+      pelota: 'admin',
+      ultima_nota: 'Trámite finalizado',
+      ultima_accion_at: new Date().toISOString(),
+    }).eq('id', id)
+    await supabase.from('movimientos').insert({
+      tramite_id: id,
+      estado: 'finalizado',
+      nota: 'Trámite finalizado',
+      pelota: 'admin',
+      registrado_por: 'admin',
+    })
+    setSaving(false)
+    setShowConfirmFinalizar(false)
+    loadTramite()
+    loadMovimientos()
+  }
+
+  async function reabrirTramite() {
+    setSaving(true)
+    await supabase.from('tramites').update({
+      finalizado: false,
+      finalizado_at: null,
+    }).eq('id', id)
+    setSaving(false)
+    loadTramite()
   }
 
   function notificarWhatsApp() {
@@ -242,6 +270,7 @@ export default function TramiteDetalle() {
   }
 
   const estadoLabel = (key: string) => {
+    if (key === 'finalizado') return '✅ Finalizado'
     const norm = ESTADO_MAP[key] || key
     const todos = [...SUBESTADOS_TECNICA, ...SUBESTADOS_MUNICIPIO]
     return todos.find(s => s.key === norm)?.label || norm.replace(/_/g, ' ')
@@ -274,6 +303,9 @@ export default function TramiteDetalle() {
           </div>
           <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: 0 }}>{tramite.municipio} · {tramite.tramite}</p>
         </div>
+        {tramite.finalizado && (
+          <span style={{ fontSize: 11, fontWeight: 700, background: 'rgba(74,222,128,0.15)', color: '#4ade80', padding: '3px 10px', borderRadius: 20 }}>✅ Finalizado</span>
+        )}
       </div>
 
       {/* NOTIFICACIÓN WHATSAPP PENDIENTE */}
@@ -292,30 +324,41 @@ export default function TramiteDetalle() {
       <div style={{ width: '100%', maxWidth: 480, display: 'grid', gap: 12 }}>
 
         {/* ESTADO ACTUAL */}
-        <div style={{ background: 'rgba(45,212,176,0.1)', borderRadius: 14, border: '1.5px solid rgba(45,212,176,0.35)', padding: 14 }}>
+        <div style={{ background: tramite.finalizado ? 'rgba(74,222,128,0.08)' : 'rgba(45,212,176,0.1)', borderRadius: 14, border: `1.5px solid ${tramite.finalizado ? 'rgba(74,222,128,0.3)' : 'rgba(45,212,176,0.35)'}`, padding: 14 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(45,212,176,0.7)', letterSpacing: 1, textTransform: 'uppercase', margin: 0 }}>Estado actual</p>
+            <p style={{ fontSize: 11, fontWeight: 700, color: tramite.finalizado ? '#4ade80' : 'rgba(45,212,176,0.7)', letterSpacing: 1, textTransform: 'uppercase', margin: 0 }}>Estado actual</p>
             <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>{tramite.ultima_accion_at ? new Date(tramite.ultima_accion_at).toLocaleDateString('es-AR') : ''}</span>
           </div>
-          <p style={{ fontSize: 15, fontWeight: 700, margin: '0 0 4px' }}>{estadoLabel(tramite.estado_actual)}</p>
-          {tramite.ultima_nota && (
+          <p style={{ fontSize: 15, fontWeight: 700, margin: '0 0 4px' }}>
+            {tramite.finalizado ? '✅ Finalizado' : estadoLabel(tramite.estado_actual)}
+          </p>
+          {tramite.finalizado && tramite.finalizado_at && (
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', margin: '0 0 8px' }}>
+              Cerrado el {new Date(tramite.finalizado_at).toLocaleDateString('es-AR')}
+            </p>
+          )}
+          {tramite.ultima_nota && !tramite.finalizado && (
             <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', margin: '0 0 10px', fontStyle: 'italic' }}>"{tramite.ultima_nota}"</p>
           )}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.06)', padding: '5px 10px', borderRadius: 20, width: 'fit-content' }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: responsableColor(tramite.pelota) }} />
-            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Responsable: {responsableLabel(tramite.pelota)}</span>
-          </div>
+          {!tramite.finalizado && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.06)', padding: '5px 10px', borderRadius: 20, width: 'fit-content' }}>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: responsableColor(tramite.pelota) }} />
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Responsable: {responsableLabel(tramite.pelota)}</span>
+            </div>
+          )}
         </div>
 
         {/* DATOS DEL EXPEDIENTE */}
         <div style={{ background: DARK2, borderRadius: 14, border: `1.5px solid ${BORDER}`, padding: 14 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.35)', letterSpacing: 1, textTransform: 'uppercase', margin: 0 }}>Datos del expediente</p>
-            <button onClick={() => setEditandoDatos(!editandoDatos)} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 20, border: `1.5px solid ${BORDER}`, background: 'transparent', color: 'rgba(255,255,255,0.4)' }}>
-              {editandoDatos ? 'Cancelar' : 'Editar'}
-            </button>
+            {!tramite.finalizado && (
+              <button onClick={() => setEditandoDatos(!editandoDatos)} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 20, border: `1.5px solid ${BORDER}`, background: 'transparent', color: 'rgba(255,255,255,0.4)' }}>
+                {editandoDatos ? 'Cancelar' : 'Editar'}
+              </button>
+            )}
           </div>
-          {editandoDatos ? (
+          {editandoDatos && !tramite.finalizado ? (
             <div style={{ display: 'grid', gap: 10 }}>
               <div>
                 <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Domicilio de obra</label>
@@ -336,18 +379,6 @@ export default function TramiteDetalle() {
                   <input value={dibujante_custom} onChange={e => setDibujanteCustom(e.target.value)} placeholder="Nombre del dibujante" style={{ marginTop: 6 }} />
                 )}
               </div>
-              {(tramite.estado_actual === 'en_dibujo' || editN.costo_dibujo || editN.fecha_entrega) && (
-                <>
-                  <div>
-                    <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Costo del dibujo (USD)</label>
-                    <input type="number" value={editN.costo_dibujo} onChange={e => setEditN(n => ({ ...n, costo_dibujo: e.target.value }))} placeholder="Ej: 150" />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Fecha estimada de entrega</label>
-                    <input type="date" value={editN.fecha_entrega} onChange={e => setEditN(n => ({ ...n, fecha_entrega: e.target.value }))} />
-                  </div>
-                </>
-              )}
               <div>
                 <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Número de parcelaria (Catastro)</label>
                 <input value={editN.parcelaria} onChange={e => setEditN(n => ({ ...n, parcelaria: e.target.value }))} placeholder="Ej: 310" />
@@ -386,11 +417,12 @@ export default function TramiteDetalle() {
             {TAREAS_FINALES.map(item => {
               const checked = tramite.checklist?.[item.key] || false
               return (
-                <button key={item.key} onClick={() => toggleChecklist(item.key)} style={{
+                <button key={item.key} onClick={() => !tramite.finalizado && toggleChecklist(item.key)} style={{
                   display: 'flex', alignItems: 'center', gap: 12,
                   background: checked ? 'rgba(74,222,128,0.08)' : 'rgba(255,255,255,0.03)',
                   border: `1.5px solid ${checked ? 'rgba(74,222,128,0.3)' : BORDER}`,
-                  borderRadius: 10, padding: '10px 14px', textAlign: 'left', width: '100%'
+                  borderRadius: 10, padding: '10px 14px', textAlign: 'left', width: '100%',
+                  cursor: tramite.finalizado ? 'default' : 'pointer'
                 }}>
                   <div style={{
                     width: 20, height: 20, borderRadius: 6, flexShrink: 0,
@@ -409,56 +441,79 @@ export default function TramiteDetalle() {
           </div>
         </div>
 
-        {/* REGISTRAR MOVIMIENTO */}
-        <div style={{ background: DARK2, borderRadius: 14, border: `1.5px solid ${BORDER}`, padding: 14 }}>
-          <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.35)', letterSpacing: 1, textTransform: 'uppercase', margin: '0 0 12px' }}>Registrar movimiento</p>
-          <div style={{ display: 'grid', gap: 10 }}>
-            <div>
-              <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 6 }}>Responsable</label>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {RESPONSABLES.map(r => (
-                  <button key={r.key} onClick={() => { setNuevoResponsable(r.key); setNuevoSubestado('') }} style={{
-                    fontSize: 11, padding: '5px 11px', borderRadius: 20,
-                    border: `1.5px solid ${nuevoResponsable === r.key ? 'rgba(45,212,176,0.4)' : BORDER}`,
-                    background: nuevoResponsable === r.key ? 'rgba(45,212,176,0.15)' : 'transparent',
-                    color: nuevoResponsable === r.key ? TEAL : 'rgba(255,255,255,0.5)'
-                  }}>{r.label}</button>
-                ))}
-              </div>
-            </div>
-
-            {subestadosActuales.length > 0 && (
+        {/* REGISTRAR MOVIMIENTO — solo si no está finalizado */}
+        {!tramite.finalizado && (
+          <div style={{ background: DARK2, borderRadius: 14, border: `1.5px solid ${BORDER}`, padding: 14 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.35)', letterSpacing: 1, textTransform: 'uppercase', margin: '0 0 12px' }}>Registrar movimiento</p>
+            <div style={{ display: 'grid', gap: 10 }}>
               <div>
-                <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 6 }}>Subestado</label>
+                <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 6 }}>Responsable</label>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {subestadosActuales.map(s => (
-                    <button key={s.key} onClick={() => setNuevoSubestado(s.key)} style={{
+                  {RESPONSABLES.map(r => (
+                    <button key={r.key} onClick={() => { setNuevoResponsable(r.key); setNuevoSubestado('') }} style={{
                       fontSize: 11, padding: '5px 11px', borderRadius: 20,
-                      border: `1.5px solid ${nuevoSubestado === s.key ? 'rgba(45,212,176,0.4)' : BORDER}`,
-                      background: nuevoSubestado === s.key ? 'rgba(45,212,176,0.15)' : 'transparent',
-                      color: nuevoSubestado === s.key ? TEAL : 'rgba(255,255,255,0.5)'
-                    }}>{s.label}</button>
+                      border: `1.5px solid ${nuevoResponsable === r.key ? 'rgba(45,212,176,0.4)' : BORDER}`,
+                      background: nuevoResponsable === r.key ? 'rgba(45,212,176,0.15)' : 'transparent',
+                      color: nuevoResponsable === r.key ? TEAL : 'rgba(255,255,255,0.5)'
+                    }}>{r.label}</button>
                   ))}
                 </div>
               </div>
-            )}
 
-            <div>
-              <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Nota</label>
-              <textarea value={nuevaNota} onChange={e => setNuevaNota(e.target.value)} placeholder="Ej: Catastro mandó correcciones del plano..." style={{ minHeight: 56, resize: 'vertical' }} />
+              {subestadosActuales.length > 0 && (
+                <div>
+                  <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 6 }}>Subestado</label>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {subestadosActuales.map(s => (
+                      <button key={s.key} onClick={() => setNuevoSubestado(s.key)} style={{
+                        fontSize: 11, padding: '5px 11px', borderRadius: 20,
+                        border: `1.5px solid ${nuevoSubestado === s.key ? 'rgba(45,212,176,0.4)' : BORDER}`,
+                        background: nuevoSubestado === s.key ? 'rgba(45,212,176,0.15)' : 'transparent',
+                        color: nuevoSubestado === s.key ? TEAL : 'rgba(255,255,255,0.5)'
+                      }}>{s.label}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Nota</label>
+                <textarea value={nuevaNota} onChange={e => setNuevaNota(e.target.value)} placeholder="Ej: Catastro mandó correcciones del plano..." style={{ minHeight: 56, resize: 'vertical' }} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>🔗 Link Dropbox / Drive (opcional)</label>
+                <input value={nuevoLink} onChange={e => setNuevoLink(e.target.value)} placeholder="https://www.dropbox.com/..." />
+              </div>
+
+              <button onClick={registrarMovimiento} disabled={saving || !nuevaNota} style={{
+                padding: 10, fontSize: 14, fontWeight: 600,
+                background: TEAL, color: '#1a2332', border: 'none', borderRadius: 10,
+                opacity: !nuevaNota ? 0.5 : 1
+              }}>{saving ? 'Guardando...' : 'Registrar'}</button>
             </div>
-
-            <div>
-              <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>🔗 Link Dropbox / Drive (opcional)</label>
-              <input value={nuevoLink} onChange={e => setNuevoLink(e.target.value)} placeholder="https://www.dropbox.com/..." />
-            </div>
-
-            <button onClick={registrarMovimiento} disabled={saving || !nuevaNota} style={{
-              padding: 10, fontSize: 14, fontWeight: 600,
-              background: TEAL, color: '#1a2332', border: 'none', borderRadius: 10,
-              opacity: !nuevaNota ? 0.5 : 1
-            }}>{saving ? 'Guardando...' : 'Registrar'}</button>
           </div>
+        )}
+
+        {/* BOTÓN FINALIZAR / REABRIR */}
+        <div style={{ display: 'grid', gap: 8 }}>
+          {!tramite.finalizado ? (
+            <button onClick={() => setShowConfirmFinalizar(true)} style={{
+              padding: 12, fontSize: 14, fontWeight: 600,
+              background: 'rgba(74,222,128,0.12)', color: '#4ade80',
+              border: '1.5px solid rgba(74,222,128,0.3)', borderRadius: 14
+            }}>
+              ✅ Marcar como finalizado
+            </button>
+          ) : (
+            <button onClick={reabrirTramite} disabled={saving} style={{
+              padding: 10, fontSize: 13,
+              background: 'transparent', color: 'rgba(255,255,255,0.3)',
+              border: `1.5px solid ${BORDER}`, borderRadius: 14
+            }}>
+              Reabrir trámite
+            </button>
+          )}
         </div>
 
         {/* HISTORIAL */}
@@ -498,6 +553,24 @@ export default function TramiteDetalle() {
           )}
         </div>
       </div>
+
+      {/* MODAL CONFIRMAR FINALIZAR */}
+      {showConfirmFinalizar && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, zIndex: 100 }}>
+          <div style={{ background: '#1a2332', borderRadius: 18, padding: 24, width: '100%', maxWidth: 360, border: `1.5px solid ${BORDER}` }}>
+            <p style={{ fontSize: 15, fontWeight: 600, margin: '0 0 8px', color: '#fff' }}>¿Finalizar trámite?</p>
+            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', margin: '0 0 20px' }}>
+              El trámite quedará cerrado. Podés reabrirlo si es necesario.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <button onClick={() => setShowConfirmFinalizar(false)} style={{ padding: 10, fontSize: 13, color: 'rgba(255,255,255,0.5)', background: 'transparent', border: `1.5px solid ${BORDER}`, borderRadius: 10 }}>Cancelar</button>
+              <button onClick={finalizarTramite} disabled={saving} style={{ padding: 10, fontSize: 13, fontWeight: 600, background: '#4ade80', color: '#1a2332', border: 'none', borderRadius: 10 }}>
+                {saving ? '...' : 'Finalizar ✅'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
