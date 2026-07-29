@@ -8,12 +8,6 @@ const BORDER = 'rgba(255,255,255,0.08)'
 
 const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
-function getMesAnio(offset = 0) {
-  const d = new Date()
-  d.setMonth(d.getMonth() + offset)
-  return { mes: d.getMonth(), anio: d.getFullYear() }
-}
-
 function primerDia(mes: number, anio: number) {
   return new Date(anio, mes, 1).toISOString()
 }
@@ -22,112 +16,97 @@ function ultimoDia(mes: number, anio: number) {
   return new Date(anio, mes + 1, 0, 23, 59, 59).toISOString()
 }
 
-type Stats = {
-  consultas_nuevas: number
-  presupuestos_enviados: number
-  aceptados: number
-  rechazados: number
-  vigentes: number
-  monto_aceptados: number
-  monto_vigentes: number
-  porcentaje_cierre: number
-  tramites_activos: number
-  tramites_finalizados: number
-  duracion_promedio_dias: number | null
-  por_responsable: Record<string, number>
+type Consulta = {
+  id: string
+  numero_p: string
+  nombre: string
+  municipio: string
+  tramite: string
+  estado: string
+  monto_usd: number
+  created_at: string
+  enviado_at: string
+}
+
+type Tramite = {
+  id: string
+  numero_p: string
+  nombre: string
+  municipio: string
+  tramite: string
+  pelota: string
+  created_at: string
+  finalizado_at: string
 }
 
 export default function Estadisticas() {
   const router = useRouter()
   const now = new Date()
   const [desdeAnio, setDesdeAnio] = useState(now.getFullYear())
-  const [desdeMes, setDesdeMes] = useState(0) // enero
+  const [desdeMes, setDesdeMes] = useState(now.getMonth())
   const [hastaAnio, setHastaAnio] = useState(now.getFullYear())
   const [hastaMes, setHastaMes] = useState(now.getMonth())
   const [loading, setLoading] = useState(false)
-  const [stats, setStats] = useState<Stats | null>(null)
+  const [detalleAbierto, setDetalleAbierto] = useState<string | null>(null)
+
+  const [consultasNuevas, setConsultasNuevas] = useState<Consulta[]>([])
+  const [enviados, setEnviados] = useState<Consulta[]>([])
+  const [tramitesActivos, setTramitesActivos] = useState<Tramite[]>([])
+  const [tramitesFinalizados, setTramitesFinalizados] = useState<Tramite[]>([])
 
   useEffect(() => { calcular() }, [desdeMes, desdeAnio, hastaMes, hastaAnio])
 
   async function calcular() {
     setLoading(true)
+    setDetalleAbierto(null)
     const desde = primerDia(desdeMes, desdeAnio)
     const hasta = ultimoDia(hastaMes, hastaAnio)
 
-    // Consultas nuevas en el período
-    const { data: consultas } = await supabase
+    const { data: c } = await supabase
       .from('consultas')
-      .select('estado, monto_usd, created_at, enviado_at')
+      .select('id, numero_p, nombre, municipio, tramite, estado, monto_usd, created_at, enviado_at')
       .gte('created_at', desde)
       .lte('created_at', hasta)
 
-    // Presupuestos enviados en el período (por fecha de envío)
-    const { data: enviados } = await supabase
+    const { data: e } = await supabase
       .from('consultas')
-      .select('estado, monto_usd, enviado_at')
+      .select('id, numero_p, nombre, municipio, tramite, estado, monto_usd, created_at, enviado_at')
       .gte('enviado_at', desde)
       .lte('enviado_at', hasta)
       .not('enviado_at', 'is', null)
 
-    // Trámites activos totales
-    const { data: tramitesActivos } = await supabase
+    const { data: ta } = await supabase
       .from('tramites')
-      .select('pelota')
+      .select('id, numero_p, nombre, municipio, tramite, pelota, created_at, finalizado_at')
       .eq('finalizado', false)
 
-    // Trámites finalizados en el período
-    const { data: tramitesFinalizados } = await supabase
+    const { data: tf } = await supabase
       .from('tramites')
-      .select('created_at, finalizado_at')
+      .select('id, numero_p, nombre, municipio, tramite, pelota, created_at, finalizado_at')
       .eq('finalizado', true)
       .gte('finalizado_at', desde)
       .lte('finalizado_at', hasta)
 
-    const c = consultas || []
-    const e = enviados || []
-    const ta = tramitesActivos || []
-    const tf = tramitesFinalizados || []
-
-    const aceptados = e.filter(x => x.estado === 'aceptado')
-    const rechazados = e.filter(x => x.estado === 'rechazado')
-    const vigentes = e.filter(x => x.estado === 'enviado')
-
-    const monto_aceptados = aceptados.reduce((s, x) => s + (x.monto_usd || 0), 0)
-    const monto_vigentes = vigentes.reduce((s, x) => s + (x.monto_usd || 0), 0)
-    const porcentaje_cierre = e.length > 0 ? Math.round((aceptados.length / e.length) * 100) : 0
-
-    // Duración promedio finalizados
-    let duracion_promedio_dias: number | null = null
-    if (tf.length > 0) {
-      const dias = tf
-        .filter(t => t.created_at && t.finalizado_at)
-        .map(t => Math.round((new Date(t.finalizado_at).getTime() - new Date(t.created_at).getTime()) / (1000 * 60 * 60 * 24)))
-      if (dias.length > 0) duracion_promedio_dias = Math.round(dias.reduce((a, b) => a + b, 0) / dias.length)
-    }
-
-    // Por responsable
-    const por_responsable: Record<string, number> = {}
-    ta.forEach(t => {
-      const r = t.pelota || 'admin'
-      por_responsable[r] = (por_responsable[r] || 0) + 1
-    })
-
-    setStats({
-      consultas_nuevas: c.length,
-      presupuestos_enviados: e.length,
-      aceptados: aceptados.length,
-      rechazados: rechazados.length,
-      vigentes: vigentes.length,
-      monto_aceptados,
-      monto_vigentes,
-      porcentaje_cierre,
-      tramites_activos: ta.length,
-      tramites_finalizados: tf.length,
-      duracion_promedio_dias,
-      por_responsable,
-    })
+    setConsultasNuevas(c || [])
+    setEnviados(e || [])
+    setTramitesActivos(ta || [])
+    setTramitesFinalizados(tf || [])
     setLoading(false)
   }
+
+  const aceptados = enviados.filter(x => x.estado === 'aceptado')
+  const rechazados = enviados.filter(x => x.estado === 'rechazado')
+  const vigentes = enviados.filter(x => x.estado === 'enviado')
+  const monto_aceptados = aceptados.reduce((s, x) => s + (x.monto_usd || 0), 0)
+  const monto_vigentes = vigentes.reduce((s, x) => s + (x.monto_usd || 0), 0)
+  const porcentaje_cierre = enviados.length > 0 ? Math.round((aceptados.length / enviados.length) * 100) : 0
+
+  const duracion_promedio = tramitesFinalizados.length > 0
+    ? Math.round(tramitesFinalizados
+        .filter(t => t.created_at && t.finalizado_at)
+        .map(t => Math.round((new Date(t.finalizado_at).getTime() - new Date(t.created_at).getTime()) / (1000 * 60 * 60 * 24)))
+        .reduce((a, b) => a + b, 0) / tramitesFinalizados.length)
+    : null
 
   const anios = [2024, 2025, 2026, 2027]
 
@@ -138,10 +117,83 @@ export default function Estadisticas() {
     admin: '#3b82f6', tecnica: '#f97316', municipio: TEAL, cliente: '#8b5cf6'
   }
 
+  function toggleDetalle(key: string) {
+    setDetalleAbierto(detalleAbierto === key ? null : key)
+  }
+
+  function ListaConsultas({ items }: { items: Consulta[] }) {
+    if (items.length === 0) return <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', padding: '8px 0', margin: 0 }}>Sin registros</p>
+    return (
+      <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
+        {items.map(c => (
+          <button key={c.id} onClick={() => router.push(`/consultas/${c.id}`)} style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            background: 'rgba(255,255,255,0.04)', border: `1px solid ${BORDER}`,
+            borderRadius: 8, padding: '8px 12px', textAlign: 'left', width: '100%'
+          }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: TEAL }}>{c.numero_p}</span>
+                <span style={{ fontSize: 13, color: '#fff' }}>{c.nombre}</span>
+              </div>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>{c.tramite} · {c.municipio}</span>
+            </div>
+            {c.monto_usd > 0 && <span style={{ fontSize: 12, fontWeight: 600, color: '#4ade80', flexShrink: 0, marginLeft: 8 }}>USD {c.monto_usd}</span>}
+          </button>
+        ))}
+      </div>
+    )
+  }
+
+  function ListaTramites({ items }: { items: Tramite[] }) {
+    if (items.length === 0) return <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', padding: '8px 0', margin: 0 }}>Sin registros</p>
+    return (
+      <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
+        {items.map(t => (
+          <button key={t.id} onClick={() => router.push(`/tramites/${t.id}`)} style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            background: 'rgba(255,255,255,0.04)', border: `1px solid ${BORDER}`,
+            borderRadius: 8, padding: '8px 12px', textAlign: 'left', width: '100%'
+          }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: TEAL }}>{t.numero_p}</span>
+                <span style={{ fontSize: 13, color: '#fff' }}>{t.nombre}</span>
+              </div>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>{t.tramite} · {t.municipio}</span>
+            </div>
+            {t.pelota && <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', flexShrink: 0, marginLeft: 8 }}>{labelResp[t.pelota] || t.pelota}</span>}
+          </button>
+        ))}
+      </div>
+    )
+  }
+
+  function MetricCard({ label, value, color, detalleKey, count }: { label: string, value: string | number, color: string, detalleKey?: string, count?: number }) {
+    const clickable = detalleKey && (count ?? 0) > 0
+    const abierto = detalleAbierto === detalleKey
+    return (
+      <div
+        onClick={() => clickable && toggleDetalle(detalleKey!)}
+        style={{
+          background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: '12px 14px',
+          cursor: clickable ? 'pointer' : 'default',
+          border: abierto ? `1.5px solid ${color}40` : '1.5px solid transparent',
+          transition: 'border 0.15s'
+        }}
+      >
+        <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: '0 0 6px' }}>{label}</p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <p style={{ fontSize: 22, fontWeight: 700, color, margin: 0 }}>{value}</p>
+          {clickable && <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)' }}>{abierto ? '↑' : '↓'}</span>}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
 
-      {/* HEADER */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem', width: '100%', maxWidth: 480 }}>
         <button onClick={() => router.push('/')} style={{ width: 32, height: 32, background: 'rgba(255,255,255,0.06)', border: `1.5px solid ${BORDER}`, borderRadius: 8, color: 'rgba(255,255,255,0.6)', fontSize: 16 }}>←</button>
         <div>
@@ -152,7 +204,7 @@ export default function Estadisticas() {
 
       <div style={{ width: '100%', maxWidth: 480, display: 'grid', gap: 12 }}>
 
-        {/* SELECTOR DE PERÍODO */}
+        {/* PERÍODO */}
         <div style={{ background: DARK2, borderRadius: 14, border: `1.5px solid ${BORDER}`, padding: 14 }}>
           <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.35)', letterSpacing: 1, textTransform: 'uppercase', margin: '0 0 12px' }}>Período</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -187,8 +239,7 @@ export default function Estadisticas() {
             ].map(p => (
               <button key={p.label} onClick={() => { setDesdeMes(p.desde.m); setDesdeAnio(p.desde.a); setHastaMes(p.hasta.m); setHastaAnio(p.hasta.a) }} style={{
                 fontSize: 11, padding: '5px 12px', borderRadius: 20,
-                border: `1.5px solid rgba(45,212,176,0.3)`, background: 'rgba(45,212,176,0.08)',
-                color: TEAL
+                border: '1.5px solid rgba(45,212,176,0.3)', background: 'rgba(45,212,176,0.08)', color: TEAL
               }}>{p.label}</button>
             ))}
           </div>
@@ -196,45 +247,61 @@ export default function Estadisticas() {
 
         {loading ? (
           <div style={{ textAlign: 'center', padding: 40, color: 'rgba(255,255,255,0.3)' }}>Calculando...</div>
-        ) : stats ? (<>
+        ) : (<>
 
           {/* CONSULTAS Y PRESUPUESTOS */}
           <div style={{ background: DARK2, borderRadius: 14, border: `1.5px solid ${BORDER}`, padding: 14 }}>
             <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.35)', letterSpacing: 1, textTransform: 'uppercase', margin: '0 0 14px' }}>Consultas y presupuestos</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <Metric label="Consultas nuevas" value={stats.consultas_nuevas} color="rgba(255,255,255,0.7)" />
-              <Metric label="Presupuestos enviados" value={stats.presupuestos_enviados} color="#60a5fa" />
-              <Metric label="Aceptados" value={stats.aceptados} color="#4ade80" />
-              <Metric label="Rechazados" value={stats.rechazados} color="#f87171" />
-              <Metric label="Vigentes (sin respuesta)" value={stats.vigentes} color="#fbbf24" />
-              <Metric label="% de cierre" value={`${stats.porcentaje_cierre}%`} color={stats.porcentaje_cierre >= 50 ? '#4ade80' : '#fbbf24'} />
+              <MetricCard label="Consultas nuevas" value={consultasNuevas.length} color="rgba(255,255,255,0.7)" detalleKey="nuevas" count={consultasNuevas.length} />
+              <MetricCard label="Presupuestos enviados" value={enviados.length} color="#60a5fa" detalleKey="enviados" count={enviados.length} />
+              <MetricCard label="Aceptados" value={aceptados.length} color="#4ade80" detalleKey="aceptados" count={aceptados.length} />
+              <MetricCard label="Rechazados" value={rechazados.length} color="#f87171" detalleKey="rechazados" count={rechazados.length} />
+              <MetricCard label="Vigentes (sin respuesta)" value={vigentes.length} color="#fbbf24" detalleKey="vigentes" count={vigentes.length} />
+              <MetricCard label="% de cierre" value={`${porcentaje_cierre}%`} color={porcentaje_cierre >= 50 ? '#4ade80' : '#fbbf24'} />
             </div>
+
+            {detalleAbierto === 'nuevas' && <ListaConsultas items={consultasNuevas} />}
+            {detalleAbierto === 'enviados' && <ListaConsultas items={enviados} />}
+            {detalleAbierto === 'aceptados' && <ListaConsultas items={aceptados} />}
+            {detalleAbierto === 'rechazados' && <ListaConsultas items={rechazados} />}
+            {detalleAbierto === 'vigentes' && <ListaConsultas items={vigentes} />}
           </div>
 
           {/* MONTOS */}
           <div style={{ background: DARK2, borderRadius: 14, border: `1.5px solid ${BORDER}`, padding: 14 }}>
             <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.35)', letterSpacing: 1, textTransform: 'uppercase', margin: '0 0 14px' }}>Facturación estimada</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <Metric label="Facturado (aceptados)" value={`USD ${stats.monto_aceptados.toLocaleString('es-AR')}`} color="#4ade80" />
-              <Metric label="Potencial (vigentes)" value={`USD ${stats.monto_vigentes.toLocaleString('es-AR')}`} color="#fbbf24" />
+              <MetricCard label="Facturado (aceptados)" value={`USD ${monto_aceptados.toLocaleString('es-AR')}`} color="#4ade80" />
+              <MetricCard label="Potencial (vigentes)" value={`USD ${monto_vigentes.toLocaleString('es-AR')}`} color="#fbbf24" />
             </div>
           </div>
 
           {/* TRÁMITES */}
           <div style={{ background: DARK2, borderRadius: 14, border: `1.5px solid ${BORDER}`, padding: 14 }}>
             <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.35)', letterSpacing: 1, textTransform: 'uppercase', margin: '0 0 14px' }}>Trámites</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
-              <Metric label="Activos totales" value={stats.tramites_activos} color={TEAL} />
-              <Metric label="Finalizados en período" value={stats.tramites_finalizados} color="#4ade80" />
-              {stats.duracion_promedio_dias !== null && (
-                <Metric label="Duración promedio" value={`${stats.duracion_promedio_dias} días`} color="#a78bfa" />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+              <MetricCard label="Activos totales" value={tramitesActivos.length} color={TEAL} detalleKey="activos" count={tramitesActivos.length} />
+              <MetricCard label="Finalizados en período" value={tramitesFinalizados.length} color="#4ade80" detalleKey="finalizados" count={tramitesFinalizados.length} />
+              {duracion_promedio !== null && (
+                <MetricCard label="Duración promedio" value={`${duracion_promedio} días`} color="#a78bfa" />
               )}
             </div>
-            {Object.keys(stats.por_responsable).length > 0 && (
+
+            {detalleAbierto === 'activos' && <ListaTramites items={tramitesActivos} />}
+            {detalleAbierto === 'finalizados' && <ListaTramites items={tramitesFinalizados} />}
+
+            {tramitesActivos.length > 0 && detalleAbierto !== 'activos' && detalleAbierto !== 'finalizados' && (
               <>
-                <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', margin: '0 0 8px' }}>Activos por responsable</p>
+                <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', margin: '4px 0 8px' }}>Activos por responsable</p>
                 <div style={{ display: 'grid', gap: 6 }}>
-                  {Object.entries(stats.por_responsable).sort((a, b) => b[1] - a[1]).map(([resp, cant]) => (
+                  {Object.entries(
+                    tramitesActivos.reduce((acc, t) => {
+                      const r = t.pelota || 'admin'
+                      acc[r] = (acc[r] || 0) + 1
+                      return acc
+                    }, {} as Record<string, number>)
+                  ).sort((a, b) => b[1] - a[1]).map(([resp, cant]) => (
                     <div key={resp} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '8px 12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <div style={{ width: 8, height: 8, borderRadius: '50%', background: colorResp[resp] || '#888' }} />
@@ -248,17 +315,8 @@ export default function Estadisticas() {
             )}
           </div>
 
-        </>) : null}
+        </>)}
       </div>
-    </div>
-  )
-}
-
-function Metric({ label, value, color }: { label: string, value: string | number, color: string }) {
-  return (
-    <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: '12px 14px' }}>
-      <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: '0 0 6px' }}>{label}</p>
-      <p style={{ fontSize: 22, fontWeight: 700, color, margin: 0 }}>{value}</p>
     </div>
   )
 }
