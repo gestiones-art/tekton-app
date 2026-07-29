@@ -255,6 +255,10 @@ export default function Home() {
               <button onClick={() => router.push('/exportar')} style={{ background: DARK2, borderRadius: 12, border: `1.5px solid ${BORDER}`, padding: 12, textAlign: 'left' }}>
   <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 2px', color: '#fff' }}>⬇ Exportar</p>
   <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>Backup en Excel</p>
+</button
+<button onClick={() => router.push('/estadisticas')} style={{ background: DARK2, borderRadius: 12, border: `1.5px solid ${BORDER}`, padding: 12, textAlign: 'left' }}>
+  <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 2px', color: '#fff' }}>📊 Estadísticas</p>
+  <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>Rendimiento</p>
 </button>
             </div>
 
