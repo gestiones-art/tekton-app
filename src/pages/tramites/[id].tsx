@@ -503,6 +503,23 @@ export default function TramiteDetalle() {
               background: 'rgba(74,222,128,0.12)', color: '#4ade80',
               border: '1.5px solid rgba(74,222,128,0.3)', borderRadius: 14
             }}>
+              {!tramite.finalizado && tramite.estado_actual !== 'en_pausa' && (
+  <button onClick={async () => {
+    await supabase.from('tramites').update({ estado_actual: 'en_pausa', pelota: 'admin', ultima_accion_at: new Date().toISOString() }).eq('id', id)
+    await supabase.from('movimientos').insert({ tramite_id: id, estado: 'en_pausa', nota: 'Trámite pausado', pelota: 'admin', registrado_por: 'admin' })
+    loadTramite(); loadMovimientos()
+  }} style={{ padding: 12, fontSize: 14, fontWeight: 600, background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.4)', border: `1.5px solid ${BORDER}`, borderRadius: 14 }}>
+    ⏸ Pausar trámite
+  </button>
+)}
+{tramite.estado_actual === 'en_pausa' && !tramite.finalizado && (
+  <button onClick={async () => {
+    await supabase.from('tramites').update({ estado_actual: 'dibujo', pelota: 'admin', ultima_accion_at: new Date().toISOString() }).eq('id', id)
+    loadTramite()
+  }} style={{ padding: 12, fontSize: 14, fontWeight: 600, background: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: '1.5px solid rgba(251,191,36,0.3)', borderRadius: 14 }}>
+    ▶ Reactivar trámite
+  </button>
+)}
               ✅ Marcar como finalizado
             </button>
           ) : (
