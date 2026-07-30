@@ -6,12 +6,10 @@ const TEAL = '#2dd4b0'
 const DARK2 = '#243044'
 const BORDER = 'rgba(255,255,255,0.08)'
 
-// pelota vieja → responsable nuevo
 const PELOTA_MAP: Record<string, string> = {
   dibujante: 'tecnica',
 }
 
-// estado_actual viejo → subestado nuevo
 const ESTADO_MAP: Record<string, string> = {
   en_dibujo: 'dibujo',
   observado_catastro: 'correc_catastro',
@@ -20,7 +18,6 @@ const ESTADO_MAP: Record<string, string> = {
   presentado_obras: 'obras',
   estructura_en_proceso: 'otros',
   pendiente_colegio: 'otros',
-  en_pausa: 'otros',
 }
 
 const RESPONSABLES = [
@@ -60,13 +57,15 @@ type Tramite = {
   n_parcelaria: string
   dibujante: string
   checklist: Record<string, boolean>
+  finalizado: boolean
 }
 
-type Vista = 'bloques' | 'lista' | 'subestados'
+type Vista = 'bloques' | 'lista' | 'subestados' | 'pausados'
 
 export default function Tramites() {
   const router = useRouter()
   const [tramites, setTramites] = useState<Tramite[]>([])
+  const [pausados, setPausados] = useState<Tramite[]>([])
   const [loading, setLoading] = useState(true)
   const [vista, setVista] = useState<Vista>('bloques')
   const [responsableFiltro, setResponsableFiltro] = useState<string | null>(null)
@@ -75,19 +74,26 @@ export default function Tramites() {
   useEffect(() => { loadTramites() }, [])
 
   async function loadTramites() {
-    const { data } = await supabase
+    const { data: activos } = await supabase
       .from('tramites')
       .select('*')
-      .not('estado_actual', 'eq', 'finalizado')
+      .eq('finalizado', false)
+      .not('estado_actual', 'eq', 'en_pausa')
       .order('ultima_accion_at', { ascending: true })
-    setTramites(data || [])
+
+    const { data: enPausa } = await supabase
+      .from('tramites')
+      .select('*')
+      .eq('estado_actual', 'en_pausa')
+      .eq('finalizado', false)
+      .order('ultima_accion_at', { ascending: true })
+
+    setTramites(activos || [])
+    setPausados(enPausa || [])
     setLoading(false)
   }
 
-  // Normaliza pelota: dibujante (dato viejo) → tecnica
   const responsableNorm = (t: Tramite) => PELOTA_MAP[t.pelota] || t.pelota
-
-  // Normaliza estado_actual: si viene valor viejo, lo mapea al nuevo
   const estadoNorm = (t: Tramite) => ESTADO_MAP[t.estado_actual] || t.estado_actual
 
   const porResponsable = (key: string) => tramites.filter(t => responsableNorm(t) === key)
@@ -134,6 +140,41 @@ export default function Tramites() {
   const subestados = responsableFiltro === 'tecnica' ? SUBESTADOS_TECNICA : SUBESTADOS_MUNICIPIO
   const subestadoActual = subestados.find(s => s.key === subestadoFiltro)
 
+  function TramiteCard({ t }: { t: Tramite }) {
+    const dias = diasSinMover(t.ultima_accion_at)
+    const esVencido = dias > 7 && responsableNorm(t) !== 'municipio'
+    const checkPendientes = t.checklist
+      ? Object.values(t.checklist).filter(v => !v).length
+      : 0
+    return (
+      <button key={t.id} onClick={() => router.push(`/tramites/${t.id}`)} style={{
+        background: DARK2, borderRadius: 14,
+        border: `1.5px solid ${esVencido ? 'rgba(248,113,113,0.3)' : BORDER}`,
+        padding: 14, textAlign: 'left', width: '100%'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          {t.numero_p && <span style={{ fontSize: 12, fontWeight: 700, color: TEAL }}>{t.numero_p}</span>}
+          <p style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#fff' }}>{t.nombre}</p>
+        </div>
+        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', margin: '0 0 6px' }}>
+          {t.domicilio && `${t.domicilio} · `}{t.tramite}
+        </p>
+        {t.n_parcelaria && <span style={{ fontSize: 11, color: TEAL, marginRight: 8 }}>📍 {t.n_parcelaria}</span>}
+        {t.n_expediente && <span style={{ fontSize: 11, color: TEAL }}>📁 {t.n_expediente}</span>}
+        {t.ultima_nota && (
+          <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', margin: '6px 0 0', fontStyle: 'italic' }}>
+            "{t.ultima_nota}"
+          </p>
+        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+          {t.dibujante && <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>✏️ {t.dibujante}</span>}
+          {checkPendientes > 0 && <span style={{ fontSize: 11, color: '#fbbf24' }}>☐ {checkPendientes} pte{checkPendientes > 1 ? 's' : ''}</span>}
+          {esVencido && <span style={{ fontSize: 11, color: '#f87171', marginLeft: 'auto' }}>⚠ {dias}d sin mover</span>}
+        </div>
+      </button>
+    )
+  }
+
   // ── VISTA LISTA ──────────────────────────────────────────────
   if (vista === 'lista') {
     const titulo = subestadoActual
@@ -143,16 +184,12 @@ export default function Tramites() {
     return (
       <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem', width: '100%', maxWidth: 480 }}>
-          <button onClick={volver} style={{
-            width: 32, height: 32, background: 'rgba(255,255,255,0.06)',
-            border: `1.5px solid ${BORDER}`, borderRadius: 8, color: 'rgba(255,255,255,0.6)', fontSize: 16
-          }}>←</button>
+          <button onClick={volver} style={{ width: 32, height: 32, background: 'rgba(255,255,255,0.06)', border: `1.5px solid ${BORDER}`, borderRadius: 8, color: 'rgba(255,255,255,0.6)', fontSize: 16 }}>←</button>
           <div>
             <p style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>{titulo}</p>
             <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: 0 }}>{itemsLista.length} expedientes</p>
           </div>
         </div>
-
         {itemsLista.length === 0 ? (
           <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)', marginTop: 60 }}>
             <p style={{ fontSize: 32, marginBottom: 12 }}>✅</p>
@@ -160,53 +197,32 @@ export default function Tramites() {
           </div>
         ) : (
           <div style={{ display: 'grid', gap: 10, width: '100%', maxWidth: 480 }}>
-            {itemsLista.map(t => {
-              const dias = diasSinMover(t.ultima_accion_at)
-              const esVencido = dias > 7 && responsableNorm(t) !== 'municipio'
-              const checkPendientes = t.checklist
-                ? Object.values(t.checklist).filter(v => !v).length
-                : 0
+            {itemsLista.map(t => <TramiteCard key={t.id} t={t} />)}
+          </div>
+        )}
+      </div>
+    )
+  }
 
-              return (
-                <button key={t.id} onClick={() => router.push(`/tramites/${t.id}`)} style={{
-                  background: DARK2, borderRadius: 14,
-                  border: `1.5px solid ${esVencido ? 'rgba(248,113,113,0.3)' : BORDER}`,
-                  padding: 14, textAlign: 'left', width: '100%'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    {t.numero_p && (
-                      <span style={{ fontSize: 12, fontWeight: 700, color: TEAL }}>{t.numero_p}</span>
-                    )}
-                    <p style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#fff' }}>{t.nombre}</p>
-                  </div>
-                  <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', margin: '0 0 6px' }}>
-                    {t.domicilio && `${t.domicilio} · `}{t.tramite}
-                  </p>
-                  {t.n_parcelaria && (
-                    <span style={{ fontSize: 11, color: TEAL, marginRight: 8 }}>📍 {t.n_parcelaria}</span>
-                  )}
-                  {t.n_expediente && (
-                    <span style={{ fontSize: 11, color: TEAL }}>📁 {t.n_expediente}</span>
-                  )}
-                  {t.ultima_nota && (
-                    <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', margin: '6px 0 0', fontStyle: 'italic' }}>
-                      "{t.ultima_nota}"
-                    </p>
-                  )}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-                    {t.dibujante && (
-                      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>✏️ {t.dibujante}</span>
-                    )}
-                    {checkPendientes > 0 && (
-                      <span style={{ fontSize: 11, color: '#fbbf24' }}>☐ {checkPendientes} pte{checkPendientes > 1 ? 's' : ''}</span>
-                    )}
-                    {esVencido && (
-                      <span style={{ fontSize: 11, color: '#f87171', marginLeft: 'auto' }}>⚠ {dias}d sin mover</span>
-                    )}
-                  </div>
-                </button>
-              )
-            })}
+  // ── VISTA PAUSADOS ───────────────────────────────────────────
+  if (vista === 'pausados') {
+    return (
+      <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem', width: '100%', maxWidth: 480 }}>
+          <button onClick={() => setVista('bloques')} style={{ width: 32, height: 32, background: 'rgba(255,255,255,0.06)', border: `1.5px solid ${BORDER}`, borderRadius: 8, color: 'rgba(255,255,255,0.6)', fontSize: 16 }}>←</button>
+          <div>
+            <p style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>⏸ En pausa</p>
+            <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: 0 }}>{pausados.length} expedientes</p>
+          </div>
+        </div>
+        {pausados.length === 0 ? (
+          <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)', marginTop: 60 }}>
+            <p style={{ fontSize: 32, marginBottom: 12 }}>✅</p>
+            <p>No hay trámites pausados</p>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gap: 10, width: '100%', maxWidth: 480 }}>
+            {pausados.map(t => <TramiteCard key={t.id} t={t} />)}
           </div>
         )}
       </div>
@@ -216,22 +232,15 @@ export default function Tramites() {
   // ── VISTA SUBESTADOS ─────────────────────────────────────────
   if (vista === 'subestados') {
     const totalResponsable = porResponsable(responsableFiltro!).length
-
     return (
       <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem', width: '100%', maxWidth: 480 }}>
-          <button onClick={volver} style={{
-            width: 32, height: 32, background: 'rgba(255,255,255,0.06)',
-            border: `1.5px solid ${BORDER}`, borderRadius: 8, color: 'rgba(255,255,255,0.6)', fontSize: 16
-          }}>←</button>
+          <button onClick={volver} style={{ width: 32, height: 32, background: 'rgba(255,255,255,0.06)', border: `1.5px solid ${BORDER}`, borderRadius: 8, color: 'rgba(255,255,255,0.6)', fontSize: 16 }}>←</button>
           <div>
-            <p style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>
-              {responsableActual?.icon} {responsableActual?.label}
-            </p>
+            <p style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>{responsableActual?.icon} {responsableActual?.label}</p>
             <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: 0 }}>{totalResponsable} expedientes</p>
           </div>
         </div>
-
         <div style={{ display: 'grid', gap: 10, width: '100%', maxWidth: 480 }}>
           {subestados.map(sub => {
             const items = porSubestado(responsableFiltro!, sub.key)
@@ -247,23 +256,17 @@ export default function Tramites() {
                   <span style={{ fontSize: 22 }}>{sub.icon}</span>
                   <div>
                     <p style={{ fontSize: 15, fontWeight: 700, margin: 0, color: '#fff' }}>{sub.label}</p>
-                    <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', margin: 0 }}>
-                      {items.length} expediente{items.length !== 1 ? 's' : ''}
-                    </p>
+                    <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', margin: 0 }}>{items.length} expediente{items.length !== 1 ? 's' : ''}</p>
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {v > 0 && (
-                    <span style={{ fontSize: 11, color: '#f87171', fontWeight: 700 }}>⚠ {v}</span>
-                  )}
+                  {v > 0 && <span style={{ fontSize: 11, color: '#f87171', fontWeight: 700 }}>⚠ {v}</span>}
                   <span style={{
                     fontSize: 13, fontWeight: 700,
                     background: items.length > 0 ? 'rgba(251,191,36,0.15)' : 'rgba(74,222,128,0.15)',
                     color: items.length > 0 ? '#fbbf24' : '#4ade80',
                     padding: '3px 10px', borderRadius: 20
-                  }}>
-                    {items.length > 0 ? items.length : '✓'}
-                  </span>
+                  }}>{items.length > 0 ? items.length : '✓'}</span>
                   <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 16 }}>→</span>
                 </div>
               </button>
@@ -278,50 +281,60 @@ export default function Tramites() {
   return (
     <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem', width: '100%', maxWidth: 420 }}>
-        <button onClick={() => router.push('/')} style={{
-          width: 32, height: 32, background: 'rgba(255,255,255,0.06)',
-          border: `1.5px solid ${BORDER}`, borderRadius: 8, color: 'rgba(255,255,255,0.6)', fontSize: 16
-        }}>←</button>
+        <button onClick={() => router.push('/')} style={{ width: 32, height: 32, background: 'rgba(255,255,255,0.06)', border: `1.5px solid ${BORDER}`, borderRadius: 8, color: 'rgba(255,255,255,0.6)', fontSize: 16 }}>←</button>
         <div>
           <p style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>Trámites en curso</p>
-          <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: 0 }}>{tramites.length} activos</p>
+          <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: 0 }}>{tramites.length} activos · {pausados.length} en pausa</p>
         </div>
       </div>
 
       {loading ? (
         <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)', marginTop: 60 }}>Cargando...</div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, width: '100%', maxWidth: 420 }}>
-          {RESPONSABLES.map(resp => {
-            const items = porResponsable(resp.key)
-            const v = vencidos(items)
-            return (
-              <button key={resp.key} onClick={() => irAResponsable(resp.key)} style={{
-                background: DARK2, borderRadius: 14, width: '100%',
-                border: `1.5px solid ${v > 0 ? 'rgba(248,113,113,0.3)' : BORDER}`,
-                padding: 14, textAlign: 'left'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                  <div style={{
-                    width: 36, height: 36, background: `${resp.color}22`,
-                    borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20
-                  }}>{resp.icon}</div>
-                  <span style={{
-                    fontSize: 11, fontWeight: 700,
-                    background: v > 0 ? 'rgba(248,113,113,0.15)' : items.length > 0 ? 'rgba(251,191,36,0.15)' : 'rgba(74,222,128,0.15)',
-                    color: v > 0 ? '#f87171' : items.length > 0 ? '#fbbf24' : '#4ade80',
-                    padding: '3px 9px', borderRadius: 20
-                  }}>
-                    {v > 0 ? `⚠ ${v}` : items.length > 0 ? items.length : '✓'}
-                  </span>
-                </div>
-                <p style={{ fontSize: 14, fontWeight: 700, margin: '0 0 4px', color: '#fff' }}>{resp.label}</p>
-                <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', margin: 0, fontWeight: 600 }}>
-                  {items.length} expediente{items.length !== 1 ? 's' : ''} →
-                </p>
-              </button>
-            )
-          })}
+        <div style={{ width: '100%', maxWidth: 420 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, marginBottom: 10 }}>
+            {RESPONSABLES.map(resp => {
+              const items = porResponsable(resp.key)
+              const v = vencidos(items)
+              return (
+                <button key={resp.key} onClick={() => irAResponsable(resp.key)} style={{
+                  background: DARK2, borderRadius: 14, width: '100%',
+                  border: `1.5px solid ${v > 0 ? 'rgba(248,113,113,0.3)' : BORDER}`,
+                  padding: 14, textAlign: 'left'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                    <div style={{ width: 36, height: 36, background: `${resp.color}22`, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>{resp.icon}</div>
+                    <span style={{
+                      fontSize: 11, fontWeight: 700,
+                      background: v > 0 ? 'rgba(248,113,113,0.15)' : items.length > 0 ? 'rgba(251,191,36,0.15)' : 'rgba(74,222,128,0.15)',
+                      color: v > 0 ? '#f87171' : items.length > 0 ? '#fbbf24' : '#4ade80',
+                      padding: '3px 9px', borderRadius: 20
+                    }}>{v > 0 ? `⚠ ${v}` : items.length > 0 ? items.length : '✓'}</span>
+                  </div>
+                  <p style={{ fontSize: 14, fontWeight: 700, margin: '0 0 4px', color: '#fff' }}>{resp.label}</p>
+                  <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', margin: 0, fontWeight: 600 }}>{items.length} expediente{items.length !== 1 ? 's' : ''} →</p>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* BOTÓN EN PAUSA */}
+          {pausados.length > 0 && (
+            <button onClick={() => setVista('pausados')} style={{
+              width: '100%', background: 'rgba(255,255,255,0.03)',
+              borderRadius: 14, border: `1.5px solid rgba(255,255,255,0.06)`,
+              padding: '12px 16px', textAlign: 'left',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 18 }}>⏸</span>
+                <p style={{ fontSize: 14, fontWeight: 600, margin: 0, color: 'rgba(255,255,255,0.5)' }}>En pausa</p>
+              </div>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.3)', background: 'rgba(255,255,255,0.06)', padding: '3px 10px', borderRadius: 20 }}>
+                {pausados.length}
+              </span>
+            </button>
+          )}
         </div>
       )}
     </div>
