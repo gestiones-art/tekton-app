@@ -82,7 +82,7 @@ export default function Consultas() {
             border: `1.5px solid ${filtro === f.key ? 'rgba(45,212,176,0.4)' : BORDER}`,
             background: filtro === f.key ? 'rgba(45,212,176,0.15)' : 'transparent',
             color: filtro === f.key ? TEAL : 'rgba(255,255,255,0.5)', fontWeight: filtro === f.key ? 700 : 400
-          }}>{f.label}</button>
+          }}>{f.label} ({f.count})f.label</button>
         ))}
       </div>
 
