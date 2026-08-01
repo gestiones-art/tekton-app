@@ -42,6 +42,8 @@ const SUBESTADOS_MUNICIPIO = [
   { key: 'otros', label: 'Otros', icon: '📎' },
 ]
 
+const MUNICIPIOS = ['San Isidro', 'Vicente López', 'Tigre', 'San Fernando']
+
 type Tramite = {
   id: string
   numero_p: string
@@ -70,6 +72,7 @@ export default function Tramites() {
   const [vista, setVista] = useState<Vista>('bloques')
   const [responsableFiltro, setResponsableFiltro] = useState<string | null>(null)
   const [subestadoFiltro, setSubestadoFiltro] = useState<string | null>(null)
+  const [municipioFiltro, setMunicipioFiltro] = useState<string>('Todos')
 
   useEffect(() => { loadTramites() }, [])
 
@@ -96,9 +99,11 @@ export default function Tramites() {
   const responsableNorm = (t: Tramite) => PELOTA_MAP[t.pelota] || t.pelota
   const estadoNorm = (t: Tramite) => ESTADO_MAP[t.estado_actual] || t.estado_actual
 
-  const porResponsable = (key: string) => tramites.filter(t => responsableNorm(t) === key)
+  const tramitesFiltrados = municipioFiltro === 'Todos' ? tramites : tramites.filter(t => t.municipio === municipioFiltro)
+
+  const porResponsable = (key: string) => tramitesFiltrados.filter(t => responsableNorm(t) === key)
   const porSubestado = (responsable: string, sub: string) =>
-    tramites.filter(t => responsableNorm(t) === responsable && estadoNorm(t) === sub)
+    tramitesFiltrados.filter(t => responsableNorm(t) === responsable && estadoNorm(t) === sub)
 
   const diasSinMover = (fecha: string) =>
     Math.floor((Date.now() - new Date(fecha).getTime()) / (1000 * 60 * 60 * 24))
@@ -147,7 +152,7 @@ export default function Tramites() {
       ? Object.values(t.checklist).filter(v => !v).length
       : 0
     return (
-      <button key={t.id} onClick={() => router.push(`/tramites/${t.id}`)} style={{
+      <button onClick={() => router.push(`/tramites/${t.id}`)} style={{
         background: DARK2, borderRadius: 14,
         border: `1.5px solid ${esVencido ? 'rgba(248,113,113,0.3)' : BORDER}`,
         padding: 14, textAlign: 'left', width: '100%'
@@ -155,6 +160,7 @@ export default function Tramites() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
           {t.numero_p && <span style={{ fontSize: 12, fontWeight: 700, color: TEAL }}>{t.numero_p}</span>}
           <p style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#fff' }}>{t.nombre}</p>
+          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginLeft: 'auto', flexShrink: 0 }}>{t.municipio}</span>
         </div>
         <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', margin: '0 0 6px' }}>
           {t.domicilio && `${t.domicilio} · `}{t.tramite}
@@ -175,6 +181,27 @@ export default function Tramites() {
     )
   }
 
+  // Filtro municipio UI
+  function FiltroMunicipio() {
+    return (
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12, width: '100%', maxWidth: 420 }}>
+        {['Todos', ...MUNICIPIOS].map(m => {
+          const count = m === 'Todos' ? tramites.length : tramites.filter(t => t.municipio === m).length
+          if (m !== 'Todos' && count === 0) return null
+          return (
+            <button key={m} onClick={() => setMunicipioFiltro(m)} style={{
+              fontSize: 11, padding: '5px 12px', borderRadius: 20,
+              border: `1.5px solid ${municipioFiltro === m ? 'rgba(45,212,176,0.4)' : BORDER}`,
+              background: municipioFiltro === m ? 'rgba(45,212,176,0.15)' : 'transparent',
+              color: municipioFiltro === m ? TEAL : 'rgba(255,255,255,0.4)',
+              fontWeight: municipioFiltro === m ? 600 : 400
+            }}>{m === 'Todos' ? `Todos (${count})` : `${m} (${count})`}</button>
+          )
+        })}
+      </div>
+    )
+  }
+
   // ── VISTA LISTA ──────────────────────────────────────────────
   if (vista === 'lista') {
     const titulo = subestadoActual
@@ -183,7 +210,7 @@ export default function Tramites() {
 
     return (
       <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem', width: '100%', maxWidth: 480 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1rem', width: '100%', maxWidth: 480 }}>
           <button onClick={volver} style={{ width: 32, height: 32, background: 'rgba(255,255,255,0.06)', border: `1.5px solid ${BORDER}`, borderRadius: 8, color: 'rgba(255,255,255,0.6)', fontSize: 16 }}>←</button>
           <div>
             <p style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>{titulo}</p>
@@ -234,7 +261,7 @@ export default function Tramites() {
     const totalResponsable = porResponsable(responsableFiltro!).length
     return (
       <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem', width: '100%', maxWidth: 480 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1rem', width: '100%', maxWidth: 480 }}>
           <button onClick={volver} style={{ width: 32, height: 32, background: 'rgba(255,255,255,0.06)', border: `1.5px solid ${BORDER}`, borderRadius: 8, color: 'rgba(255,255,255,0.6)', fontSize: 16 }}>←</button>
           <div>
             <p style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>{responsableActual?.icon} {responsableActual?.label}</p>
@@ -280,11 +307,11 @@ export default function Tramites() {
   // ── VISTA BLOQUES PRINCIPAL ──────────────────────────────────
   return (
     <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem', width: '100%', maxWidth: 420 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1rem', width: '100%', maxWidth: 420 }}>
         <button onClick={() => router.push('/')} style={{ width: 32, height: 32, background: 'rgba(255,255,255,0.06)', border: `1.5px solid ${BORDER}`, borderRadius: 8, color: 'rgba(255,255,255,0.6)', fontSize: 16 }}>←</button>
         <div>
           <p style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>Trámites en curso</p>
-          <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: 0 }}>{tramites.length} activos · {pausados.length} en pausa</p>
+          <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: 0 }}>{tramitesFiltrados.length} activos · {pausados.length} en pausa</p>
         </div>
       </div>
 
@@ -292,6 +319,7 @@ export default function Tramites() {
         <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)', marginTop: 60 }}>Cargando...</div>
       ) : (
         <div style={{ width: '100%', maxWidth: 420 }}>
+          <FiltroMunicipio />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, marginBottom: 10 }}>
             {RESPONSABLES.map(resp => {
               const items = porResponsable(resp.key)
@@ -318,7 +346,6 @@ export default function Tramites() {
             })}
           </div>
 
-          {/* BOTÓN EN PAUSA */}
           {pausados.length > 0 && (
             <button onClick={() => setVista('pausados')} style={{
               width: '100%', background: 'rgba(255,255,255,0.03)',
