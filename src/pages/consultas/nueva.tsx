@@ -68,7 +68,10 @@ export default function NuevaConsulta() {
     try {
       // Convertir audio a base64
       const buffer = await blob.arrayBuffer()
-      const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)))
+      const uint8Array = new Uint8Array(buffer)
+let binary = ''
+uint8Array.forEach(byte => { binary += String.fromCharCode(byte) })
+const base64 = btoa(binary)
 
       // Enviar a Claude para transcribir y extraer datos
       const response = await fetch('https://api.anthropic.com/v1/messages', {
