@@ -55,6 +55,13 @@ export default function Consultas() {
   const pendientes = consultas.filter(c => c.estado === 'pendiente').length
   const pdteEnviar = consultas.filter(c => c.estado === 'pdte_enviar').length
 
+  const contadores = {
+    activos: consultas.filter(c => ['pendiente', 'pdte_enviar', 'enviado'].includes(c.estado)).length,
+    aceptados: consultas.filter(c => c.estado === 'aceptado').length,
+    cerrados: consultas.filter(c => c.estado === 'rechazado' || c.estado === 'cancelado').length,
+    todos: consultas.length,
+  }
+
   return (
     <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem', width: '100%', maxWidth: 480 }}>
@@ -70,19 +77,19 @@ export default function Consultas() {
         <button onClick={() => router.push('/consultas/nueva')} style={{ marginLeft: 'auto', fontSize: 12, padding: '6px 12px', borderRadius: 20, background: TEAL, color: '#1a2332', border: 'none', fontWeight: 600 }}>+ Nueva</button>
       </div>
 
-      <div style={{ display: 'flex', gap: 6, marginBottom: 14, width: '100%', maxWidth: 480 }}>
- {[
-          { key: 'activos', label: 'Activos', count: consultas.filter(c => ['pendiente', 'pdte_enviar', 'enviado'].includes(c.estado)).length },
-          { key: 'aceptados', label: 'Aceptados', count: consultas.filter(c => c.estado === 'aceptado').length },
-          { key: 'cerrados', label: 'Cerrados', count: consultas.filter(c => c.estado === 'rechazado' || c.estado === 'cancelado').length },
-          { key: 'todos', label: 'Todos', count: consultas.length },
+      <div style={{ display: 'flex', gap: 6, marginBottom: 14, width: '100%', maxWidth: 480, flexWrap: 'wrap' }}>
+        {[
+          { key: 'activos', label: 'Activos' },
+          { key: 'aceptados', label: 'Aceptados' },
+          { key: 'cerrados', label: 'Cerrados' },
+          { key: 'todos', label: 'Todos' },
         ].map(f => (
           <button key={f.key} onClick={() => setFiltro(f.key)} style={{
             fontSize: 11, padding: '5px 12px', borderRadius: 20, whiteSpace: 'nowrap',
             border: `1.5px solid ${filtro === f.key ? 'rgba(45,212,176,0.4)' : BORDER}`,
             background: filtro === f.key ? 'rgba(45,212,176,0.15)' : 'transparent',
             color: filtro === f.key ? TEAL : 'rgba(255,255,255,0.5)', fontWeight: filtro === f.key ? 700 : 400
-          }}>{f.label} ({f.count})f.label</button>
+          }}>{f.label} ({contadores[f.key as keyof typeof contadores]})</button>
         ))}
       </div>
 
