@@ -71,11 +71,11 @@ export default function Consultas() {
       </div>
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 14, width: '100%', maxWidth: 480 }}>
-        {[
-          { key: 'activos', label: 'Activos' },
-          { key: 'aceptados', label: 'Aceptados' },
-          { key: 'cerrados', label: 'Cerrados' },
-          { key: 'todos', label: 'Todos' },
+ {[
+          { key: 'activos', label: 'Activos', count: consultas.filter(c => ['pendiente', 'pdte_enviar', 'enviado'].includes(c.estado)).length },
+          { key: 'aceptados', label: 'Aceptados', count: consultas.filter(c => c.estado === 'aceptado').length },
+          { key: 'cerrados', label: 'Cerrados', count: consultas.filter(c => c.estado === 'rechazado' || c.estado === 'cancelado').length },
+          { key: 'todos', label: 'Todos', count: consultas.length },
         ].map(f => (
           <button key={f.key} onClick={() => setFiltro(f.key)} style={{
             fontSize: 11, padding: '5px 12px', borderRadius: 20, whiteSpace: 'nowrap',
