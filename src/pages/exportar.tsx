@@ -38,7 +38,7 @@ export default function Exportar() {
         'Domicilio': t.domicilio || '',
         'Municipio': t.municipio || '',
         'Trámite': t.tramite || '',
-        'Estado': t.estado_actual || '',
+       'Estado': t.finalizado ? 'Finalizado' : t.estado_actual === 'en_pausa' ? 'En pausa' : t.estado_actual || '',
         'Responsable': t.pelota || '',
         'Última nota': t.ultima_nota || '',
         'Última acción': t.ultima_accion_at ? new Date(t.ultima_accion_at).toLocaleDateString('es-AR') : '',
