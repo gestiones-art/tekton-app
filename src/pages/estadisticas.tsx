@@ -76,12 +76,13 @@ export default function Estadisticas() {
       .not('enviado_at', 'is', null)
 
     // FIX: antes solo filtraba finalizado=false, dejaba pasar los trámites en pausa.
-    // Ahora excluye también en_pausa=true, igual que /home.
+    // Ahora excluye en_pausa=true, pero con .or() para no perder los registros
+    // donde en_pausa es NULL (nunca se seteó) — .eq('en_pausa', false) los excluía a todos.
     const { data: ta } = await supabase
       .from('tramites')
       .select('id, numero_p, nombre, municipio, tramite, pelota, created_at, finalizado_at')
       .eq('finalizado', false)
-      .eq('en_pausa', false)
+      .or('en_pausa.eq.false,en_pausa.is.null')
 
     const { data: tf } = await supabase
       .from('tramites')
