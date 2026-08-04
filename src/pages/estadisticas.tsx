@@ -75,10 +75,13 @@ export default function Estadisticas() {
       .lte('enviado_at', hasta)
       .not('enviado_at', 'is', null)
 
+    // FIX: antes solo filtraba finalizado=false, dejaba pasar los trámites en pausa.
+    // Ahora excluye también en_pausa=true, igual que /home.
     const { data: ta } = await supabase
       .from('tramites')
       .select('id, numero_p, nombre, municipio, tramite, pelota, created_at, finalizado_at')
       .eq('finalizado', false)
+      .eq('en_pausa', false)
 
     const { data: tf } = await supabase
       .from('tramites')
