@@ -75,14 +75,13 @@ export default function Estadisticas() {
       .lte('enviado_at', hasta)
       .not('enviado_at', 'is', null)
 
-    // FIX: antes solo filtraba finalizado=false, dejaba pasar los trámites en pausa.
-    // Ahora excluye en_pausa=true, pero con .or() para no perder los registros
-    // donde en_pausa es NULL (nunca se seteó) — .eq('en_pausa', false) los excluía a todos.
+    // FIX: en_pausa NO es una columna — es un valor dentro del campo de texto estado_actual.
+    // El filtro correcto excluye finalizado=true Y estado_actual='en_pausa'.
     const { data: ta, error: errorTa } = await supabase
       .from('tramites')
       .select('id, numero_p, nombre, municipio, tramite, pelota, created_at, finalizado_at')
       .eq('finalizado', false)
-      .or('en_pausa.eq.false,en_pausa.is.null')
+      .neq('estado_actual', 'en_pausa')
 
     if (errorTa) {
       console.error('Error consultando tramitesActivos:', errorTa)
