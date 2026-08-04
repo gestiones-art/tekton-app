@@ -93,7 +93,8 @@ export default function Home() {
     const { data: tr } = await supabase
       .from('tramites')
       .select('*')
-      .not('estado_actual', 'eq', 'finalizado')
+    .eq('finalizado', false)
+.not('estado_actual', 'eq', 'en_pausa')
       .order('ultima_accion_at', { ascending: true })
 
     const { data: cons } = await supabase
