@@ -241,6 +241,14 @@ export default function Home() {
 
             {/* ACCESOS RAPIDOS */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
+              <button onClick={() => router.push('/todo')} style={{ background: DARK2, borderRadius: 12, border: `1.5px solid ${BORDER}`, padding: 12, textAlign: 'left' }}>
+                <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 2px', color: '#fff' }}>🗂️ Todo</p>
+                <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>Vista única con filtros</p>
+              </button>
+              <button onClick={() => router.push('/pendientes')} style={{ background: DARK2, borderRadius: 12, border: `1.5px solid ${BORDER}`, padding: 12, textAlign: 'left' }}>
+                <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 2px', color: '#fff' }}>📥 Pendientes</p>
+                <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>Bandeja por responsable</p>
+              </button>
               <button onClick={() => router.push('/consultas')} style={{ background: DARK2, borderRadius: 12, border: `1.5px solid ${BORDER}`, padding: 12, textAlign: 'left' }}>
                 <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 2px', color: '#fff' }}>📋 Consultas</p>
                 <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>{consultas.length} activas</p>
@@ -273,4 +281,3 @@ export default function Home() {
     </div>
   )
 }
-                                                             
