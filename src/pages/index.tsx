@@ -31,17 +31,6 @@ type Consulta = {
   created_at: string
 }
 
-const RESPONSABLES = [
-  { key: 'admin', label: 'Ptes. Adm/Comercial', color: '#3b82f6', icon: '🔵' },
-  { key: 'tecnica', label: 'Ptes. Técnica', color: '#f97316', icon: '🟠' },
-  { key: 'municipio', label: 'En Municipio', color: TEAL, icon: '🟢' },
-  { key: 'cliente', label: 'En Cliente', color: '#a78bfa', icon: '🟣' },
-]
-
-const PELOTA_MAP: Record<string, string> = {
-  dibujante: 'tecnica',
-}
-
 const ESTADO_LABEL: Record<string, string> = {
   en_dibujo: '✏️ En dibujo',
   listo_para_presentar: '✅ Listo para presentar',
@@ -65,7 +54,6 @@ export default function Home() {
   const [busqueda, setBusqueda] = useState('')
   const [resultados, setResultados] = useState<Tramite[]>([])
   const [buscando, setBuscando] = useState(false)
-  const [bloqueAbierto, setBloqueAbierto] = useState<string | null>(null)
 
   const now = new Date()
   const fecha = now.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -93,8 +81,8 @@ export default function Home() {
     const { data: tr } = await supabase
       .from('tramites')
       .select('*')
-    .eq('finalizado', false)
-.not('estado_actual', 'eq', 'en_pausa')
+      .eq('finalizado', false)
+      .not('estado_actual', 'eq', 'en_pausa')
       .order('ultima_accion_at', { ascending: true })
 
     const { data: cons } = await supabase
@@ -105,16 +93,6 @@ export default function Home() {
     setTramites(tr || [])
     setConsultas(cons || [])
     setLoading(false)
-  }
-
-  const responsableNorm = (t: Tramite) => PELOTA_MAP[t.pelota] || t.pelota
-  const porResponsable = (key: string) => tramites.filter(t => responsableNorm(t) === key)
-  const diasSinMover = (fecha: string) => Math.floor((Date.now() - new Date(fecha).getTime()) / (1000 * 60 * 60 * 24))
-
-  const consultasPorResponsable = (key: string) => {
-    if (key === 'tecnica') return consultas.filter(c => c.estado === 'pendiente' || c.estado === 'pendiente_validacion')
-    if (key === 'admin') return consultas.filter(c => c.estado === 'pdte_enviar' || c.estado === 'enviado')
-    return []
   }
 
   return (
@@ -168,78 +146,7 @@ export default function Home() {
           <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)', marginTop: 60 }}>Cargando...</div>
         ) : (
           <>
-            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', margin: '0 0 10px' }}>Trámites en curso</p>
-            <div style={{ display: 'grid', gap: 8, marginBottom: '1.5rem' }}>
-              {RESPONSABLES.map(resp => {
-                const itemsTramites = porResponsable(resp.key)
-                const itemsConsultas = consultasPorResponsable(resp.key)
-                const totalItems = itemsTramites.length + itemsConsultas.length
-                const vencidos = itemsTramites.filter(t => diasSinMover(t.ultima_accion_at) > 7).length
-                const abierto = bloqueAbierto === resp.key
-
-                return (
-                  <div key={resp.key} style={{ background: DARK2, borderRadius: 14, border: `1.5px solid ${vencidos > 0 ? 'rgba(248,113,113,0.2)' : BORDER}`, overflow: 'hidden' }}>
-                    <button onClick={() => setBloqueAbierto(abierto ? null : resp.key)} style={{
-                      width: '100%', padding: '14px 16px', textAlign: 'left', background: 'transparent', border: 'none',
-                      display: 'flex', alignItems: 'center', gap: 12
-                    }}>
-                      <div style={{ width: 10, height: 10, borderRadius: '50%', background: resp.color, flexShrink: 0 }} />
-                      <div style={{ flex: 1 }}>
-                        <p style={{ fontSize: 14, fontWeight: 700, margin: 0, color: '#fff' }}>{resp.label}</p>
-                        {vencidos > 0 && <p style={{ fontSize: 11, color: '#f87171', margin: 0 }}>⚠ {vencidos} sin mover hace +7 días</p>}
-                      </div>
-                      <span style={{ fontSize: 20, fontWeight: 800, color: totalItems > 0 ? resp.color : 'rgba(255,255,255,0.2)' }}>{totalItems}</span>
-                      <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.3)' }}>{abierto ? '↑' : '↓'}</span>
-                    </button>
-
-                    {abierto && (
-                      <div style={{ borderTop: `1px solid ${BORDER}` }}>
-                        {totalItems === 0 ? (
-                          <p style={{ padding: '12px 16px', fontSize: 13, color: 'rgba(255,255,255,0.3)', margin: 0 }}>Sin pendientes ✓</p>
-                        ) : (
-                          <>
-                            {itemsConsultas.map(c => (
-                              <button key={c.id} onClick={() => router.push(`/consultas/${c.id}`)} style={{
-                                width: '100%', padding: '12px 16px', textAlign: 'left',
-                                background: 'rgba(251,191,36,0.05)', border: 'none', borderBottom: `1px solid ${BORDER}`
-                              }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                                  <span style={{ fontSize: 10, fontWeight: 700, color: '#fbbf24', background: 'rgba(251,191,36,0.15)', padding: '1px 6px', borderRadius: 10 }}>CONSULTA</span>
-                                  <span style={{ fontSize: 12, fontWeight: 700, color: TEAL }}>{c.numero_p}</span>
-                                  <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{c.nombre}</span>
-                                </div>
-                                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>{c.tramite} · {c.municipio}</span>
-                              </button>
-                            ))}
-                            {itemsTramites.map(t => {
-                              const dias = diasSinMover(t.ultima_accion_at)
-                              return (
-                                <button key={t.id} onClick={() => router.push(`/tramites/${t.id}`)} style={{
-                                  width: '100%', padding: '12px 16px', textAlign: 'left',
-                                  background: 'transparent', border: 'none', borderBottom: `1px solid ${BORDER}`
-                                }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                                    <span style={{ fontSize: 12, fontWeight: 700, color: TEAL }}>{t.numero_p}</span>
-                                    <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{t.nombre}</span>
-                                  </div>
-                                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const, alignItems: 'center' }}>
-                                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>{ESTADO_LABEL[t.estado_actual] || t.estado_actual?.replace(/_/g, ' ')}</span>
-                                    {t.ultima_nota && <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', fontStyle: 'italic' }}>· "{t.ultima_nota}"</span>}
-                                    {dias > 7 && <span style={{ fontSize: 10, color: '#f87171', marginLeft: 'auto' }}>⚠ {dias}d</span>}
-                                  </div>
-                                </button>
-                              )
-                            })}
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-
-            {/* ACCESOS RAPIDOS */}
+            {/* ACCESOS RAPIDOS — simplificado: sin Cobranza, sin Trámites (redundante con Todo) */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
               <button onClick={() => router.push('/todo')} style={{ background: DARK2, borderRadius: 12, border: `1.5px solid ${BORDER}`, padding: 12, textAlign: 'left' }}>
                 <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 2px', color: '#fff' }}>🗂️ Todo</p>
@@ -253,21 +160,13 @@ export default function Home() {
                 <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 2px', color: '#fff' }}>📋 Consultas</p>
                 <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>{consultas.length} activas</p>
               </button>
-              <button onClick={() => router.push('/tramites')} style={{ background: DARK2, borderRadius: 12, border: `1.5px solid ${BORDER}`, padding: 12, textAlign: 'left' }}>
-                <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 2px', color: '#fff' }}>📁 Trámites</p>
-                <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>{tramites.length} activos</p>
-              </button>
-              <button onClick={() => router.push('/cobranza')} style={{ background: DARK2, borderRadius: 12, border: `1.5px solid ${BORDER}`, padding: 12, textAlign: 'left' }}>
-                <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 2px', color: '#fff' }}>💰 Cobranza</p>
-                <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>Saldos pendientes</p>
-              </button>
-              <button onClick={() => router.push('/exportar')} style={{ background: DARK2, borderRadius: 12, border: `1.5px solid ${BORDER}`, padding: 12, textAlign: 'left' }}>
-                <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 2px', color: '#fff' }}>⬇ Exportar</p>
-                <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>Backup en Excel</p>
-              </button>
               <button onClick={() => router.push('/estadisticas')} style={{ background: DARK2, borderRadius: 12, border: `1.5px solid ${BORDER}`, padding: 12, textAlign: 'left' }}>
                 <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 2px', color: '#fff' }}>📊 Estadísticas</p>
                 <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>Rendimiento</p>
+              </button>
+              <button onClick={() => router.push('/exportar')} style={{ background: DARK2, borderRadius: 12, border: `1.5px solid ${BORDER}`, padding: 12, textAlign: 'left', gridColumn: '1 / -1' }}>
+                <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 2px', color: '#fff' }}>⬇ Exportar</p>
+                <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>Backup en Excel</p>
               </button>
             </div>
 
