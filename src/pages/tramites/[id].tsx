@@ -224,6 +224,28 @@ export default function TramiteDetalle() {
     loadTramite()
   }
 
+  async function pausarTramite() {
+    setSaving(true)
+    await supabase.from('tramites').update({
+      estado_actual: 'en_pausa', pelota: 'admin', ultima_accion_at: new Date().toISOString()
+    }).eq('id', id)
+    await supabase.from('movimientos').insert({
+      tramite_id: id, estado: 'en_pausa', nota: 'Trámite pausado', pelota: 'admin', registrado_por: 'admin'
+    })
+    setSaving(false)
+    loadTramite()
+    loadMovimientos()
+  }
+
+  async function reactivarTramite() {
+    setSaving(true)
+    await supabase.from('tramites').update({
+      estado_actual: 'dibujo', pelota: 'admin', ultima_accion_at: new Date().toISOString()
+    }).eq('id', id)
+    setSaving(false)
+    loadTramite()
+  }
+
   function notificarWhatsApp() {
     if (!tramite || !notificacionPendiente) return
     const esTecnica = notificacionPendiente === 'tecnica'
@@ -289,13 +311,14 @@ export default function TramiteDetalle() {
   )
 
   const tareasCompletadas = TAREAS_FINALES.filter(t => tramite.checklist?.[t.key]).length
+  const enPausa = tramite.estado_actual === 'en_pausa'
 
   return (
     <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
 
       {/* HEADER */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem', width: '100%', maxWidth: 480 }}>
-        <button onClick={() => router.push('/tramites')} style={{ width: 32, height: 32, background: 'rgba(255,255,255,0.06)', border: `1.5px solid ${BORDER}`, borderRadius: 8, color: 'rgba(255,255,255,0.6)', fontSize: 16 }}>←</button>
+        <button onClick={() => router.back()} style={{ width: 32, height: 32, background: 'rgba(255,255,255,0.06)', border: `1.5px solid ${BORDER}`, borderRadius: 8, color: 'rgba(255,255,255,0.6)', fontSize: 16 }}>←</button>
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {tramite.numero_p && <span style={{ fontSize: 12, fontWeight: 700, color: TEAL }}>{tramite.numero_p}</span>}
@@ -495,41 +518,36 @@ export default function TramiteDetalle() {
           </div>
         )}
 
-        {/* BOTÓN FINALIZAR / REABRIR */}
+        {/* BOTONES DE ESTADO — Pausar/Reactivar y Finalizar/Reabrir, cada uno independiente */}
         <div style={{ display: 'grid', gap: 8 }}>
+          {!tramite.finalizado && !enPausa && (
+            <button onClick={pausarTramite} disabled={saving} style={{
+              padding: 12, fontSize: 14, fontWeight: 600,
+              background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.4)',
+              border: `1.5px solid ${BORDER}`, borderRadius: 14
+            }}>⏸ Pausar trámite</button>
+          )}
+
+          {!tramite.finalizado && enPausa && (
+            <button onClick={reactivarTramite} disabled={saving} style={{
+              padding: 12, fontSize: 14, fontWeight: 600,
+              background: 'rgba(251,191,36,0.12)', color: '#fbbf24',
+              border: '1.5px solid rgba(251,191,36,0.3)', borderRadius: 14
+            }}>▶ Reactivar trámite</button>
+          )}
+
           {!tramite.finalizado ? (
             <button onClick={() => setShowConfirmFinalizar(true)} style={{
               padding: 12, fontSize: 14, fontWeight: 600,
               background: 'rgba(74,222,128,0.12)', color: '#4ade80',
               border: '1.5px solid rgba(74,222,128,0.3)', borderRadius: 14
-            }}>
-              {!tramite.finalizado && tramite.estado_actual !== 'en_pausa' && (
-  <button onClick={async () => {
-    await supabase.from('tramites').update({ estado_actual: 'en_pausa', pelota: 'admin', ultima_accion_at: new Date().toISOString() }).eq('id', id)
-    await supabase.from('movimientos').insert({ tramite_id: id, estado: 'en_pausa', nota: 'Trámite pausado', pelota: 'admin', registrado_por: 'admin' })
-    loadTramite(); loadMovimientos()
-  }} style={{ padding: 12, fontSize: 14, fontWeight: 600, background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.4)', border: `1.5px solid ${BORDER}`, borderRadius: 14 }}>
-    ⏸ Pausar trámite
-  </button>
-)}
-{tramite.estado_actual === 'en_pausa' && !tramite.finalizado && (
-  <button onClick={async () => {
-    await supabase.from('tramites').update({ estado_actual: 'dibujo', pelota: 'admin', ultima_accion_at: new Date().toISOString() }).eq('id', id)
-    loadTramite()
-  }} style={{ padding: 12, fontSize: 14, fontWeight: 600, background: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: '1.5px solid rgba(251,191,36,0.3)', borderRadius: 14 }}>
-    ▶ Reactivar trámite
-  </button>
-)}
-              ✅ Marcar como finalizado
-            </button>
+            }}>✅ Marcar como finalizado</button>
           ) : (
             <button onClick={reabrirTramite} disabled={saving} style={{
               padding: 10, fontSize: 13,
               background: 'transparent', color: 'rgba(255,255,255,0.3)',
               border: `1.5px solid ${BORDER}`, borderRadius: 14
-            }}>
-              Reabrir trámite
-            </button>
+            }}>Reabrir trámite</button>
           )}
         </div>
 
