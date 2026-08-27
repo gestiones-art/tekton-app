@@ -105,7 +105,7 @@ export default function TramiteDetalle() {
   const [editN, setEditN] = useState({
     parcelaria: '', expediente: '', dibujante: '',
     costo_dibujo: '', fecha_entrega: '',
-    domicilio: '', celular: ''
+    domicilio: '', celular: '', firma: ''
   })
   const [saving, setSaving] = useState(false)
   const [notificacionPendiente, setNotificacionPendiente] = useState<null | 'tecnica' | 'admin'>(null)
@@ -127,7 +127,8 @@ export default function TramiteDetalle() {
         costo_dibujo: data.costo_dibujo || '',
         fecha_entrega: data.fecha_entrega_dibujo || '',
         domicilio: data.domicilio || '',
-        celular: data.celular || ''
+        celular: data.celular || '',
+        firma: data.firma || ''
       })
     }
   }
@@ -269,6 +270,7 @@ export default function TramiteDetalle() {
       fecha_entrega_dibujo: editN.fecha_entrega,
       domicilio: editN.domicilio,
       celular: editN.celular,
+      firma: editN.firma,
     }).eq('id', id)
     setSaving(false)
     setEditandoDatos(false)
@@ -390,6 +392,10 @@ export default function TramiteDetalle() {
               <div>
                 <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Celular</label>
                 <input value={editN.celular} onChange={e => setEditN(n => ({ ...n, celular: e.target.value }))} placeholder="Ej: 1155556666" />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Firma</label>
+                <input value={editN.firma} onChange={e => setEditN(n => ({ ...n, firma: e.target.value }))} placeholder="Ej: A confirmar" />
               </div>
               <div>
                 <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Dibujante asignado</label>
