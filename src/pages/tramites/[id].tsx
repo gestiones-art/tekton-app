@@ -314,6 +314,7 @@ export default function TramiteDetalle() {
 
   const tareasCompletadas = TAREAS_FINALES.filter(t => tramite.checklist?.[t.key]).length
   const enPausa = tramite.estado_actual === 'en_pausa'
+  const responsableSinCambios = nuevoResponsable === (PELOTA_MAP[tramite.pelota] || tramite.pelota)
 
   return (
     <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -514,6 +515,17 @@ export default function TramiteDetalle() {
                 <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>🔗 Link Dropbox / Drive (opcional)</label>
                 <input value={nuevoLink} onChange={e => setNuevoLink(e.target.value)} placeholder="https://www.dropbox.com/..." />
               </div>
+
+              {!nuevaNota && !responsableSinCambios && (
+                <p style={{ fontSize: 12, color: '#fbbf24', margin: 0 }}>
+                  ⚠ Escribí una nota para poder registrar el cambio de responsable.
+                </p>
+              )}
+              {responsableSinCambios && (
+                <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', margin: 0 }}>
+                  Sigue en {responsableLabel(nuevoResponsable)} — tocá otro responsable arriba si te olvidaste de cambiarlo.
+                </p>
+              )}
 
               <button onClick={registrarMovimiento} disabled={saving || !nuevaNota} style={{
                 padding: 10, fontSize: 14, fontWeight: 600,
