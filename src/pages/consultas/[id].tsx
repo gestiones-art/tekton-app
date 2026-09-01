@@ -271,6 +271,11 @@ async function agregarNota() {
       ' ' + d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
   }
 
+  function fechaCorta(iso: string) {
+    if (!iso) return ''
+    return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+  }
+
   if (!consulta) return (
     <div style={{ background: '#1a2332', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.4)' }}>
       Cargando...
@@ -290,7 +295,9 @@ async function agregarNota() {
             <span style={{ fontSize: 12, fontWeight: 700, color: TEAL }}>{consulta.numero_p}</span>
             <p style={{ fontSize: 15, fontWeight: 600, margin: 0, color: '#fff' }}>{consulta.nombre}</p>
           </div>
-          <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: 0 }}>{consulta.municipio} · {consulta.tramite}</p>
+          <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: 0 }}>
+            {consulta.municipio} · {consulta.tramite} · Creado {fechaCorta(consulta.created_at)}
+          </p>
         </div>
         <span style={{ fontSize: 11, fontWeight: 700, background: est.bg, color: est.color, padding: '3px 10px', borderRadius: 20 }}>{est.label}</span>
       </div>
@@ -377,6 +384,7 @@ async function agregarNota() {
                 <button onClick={() => setModoPresupuesto(true)} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 20, border: `1.5px solid ${BORDER}`, background: 'transparent', color: 'rgba(255,255,255,0.4)' }}>Editar</button>
               )}
             </div>
+            {consulta.enviado_at && <Campo label="Enviado" value={fechaCorta(consulta.enviado_at)} />}
             <Campo label="Total" value={`USD ${consulta.monto_usd?.toLocaleString()}`} />
             {consulta.anticipo_usd > 0 && <Campo label="Anticipo" value={`USD ${consulta.anticipo_usd}`} />}
             {consulta.segunda_cuota_usd > 0 && <Campo label="2da cuota" value={`USD ${consulta.segunda_cuota_usd}`} />}
