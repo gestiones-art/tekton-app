@@ -50,6 +50,7 @@ type Consulta = {
   no_incluye: string
   vigencia_dias: number
   enviado_at: string
+  fecha_aceptado: string
 }
 
 type Nota = {
@@ -212,7 +213,7 @@ async function agregarNota() {
 
   async function marcarAceptado() {
     setSaving(true)
-    await supabase.from('consultas').update({ estado: 'aceptado' }).eq('id', id)
+    await supabase.from('consultas').update({ estado: 'aceptado', fecha_aceptado: new Date().toISOString() }).eq('id', id)
     if (consulta) {
       await supabase.from('tramites').insert({
         numero_p: consulta.numero_p,
@@ -385,6 +386,7 @@ async function agregarNota() {
               )}
             </div>
             {consulta.enviado_at && <Campo label="Enviado" value={fechaCorta(consulta.enviado_at)} />}
+            {consulta.fecha_aceptado && <Campo label="Aceptado" value={fechaCorta(consulta.fecha_aceptado)} />}
             <Campo label="Total" value={`USD ${consulta.monto_usd?.toLocaleString()}`} />
             {consulta.anticipo_usd > 0 && <Campo label="Anticipo" value={`USD ${consulta.anticipo_usd}`} />}
             {consulta.segunda_cuota_usd > 0 && <Campo label="2da cuota" value={`USD ${consulta.segunda_cuota_usd}`} />}
