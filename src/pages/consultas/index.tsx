@@ -23,9 +23,15 @@ type Consulta = {
   tramite: string
   estado: string
   created_at: string
+  enviado_at: string
   monto_usd: number
   motivo_cancelacion: string
   motivo_rechazo: string
+}
+
+function fechaCorta(iso: string) {
+  if (!iso) return ''
+  return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })
 }
 
 export default function Consultas() {
@@ -39,7 +45,7 @@ export default function Consultas() {
   async function loadConsultas() {
     const { data } = await supabase
       .from('consultas')
-      .select('id, numero_p, nombre, municipio, tramite, estado, created_at, monto_usd, motivo_cancelacion, motivo_rechazo')
+      .select('id, numero_p, nombre, municipio, tramite, estado, created_at, enviado_at, monto_usd, motivo_cancelacion, motivo_rechazo')
       .order('created_at', { ascending: false })
     setConsultas(data || [])
     setLoading(false)
@@ -117,6 +123,10 @@ export default function Consultas() {
                   <span style={{ fontSize: 10, fontWeight: 700, background: est.bg, color: est.color, padding: '2px 8px', borderRadius: 20, flexShrink: 0, marginLeft: 8 }}>{est.label}</span>
                 </div>
                 <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', margin: 0 }}>{c.tramite} · {c.municipio}</p>
+                <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', margin: '4px 0 0' }}>
+                  Creado {fechaCorta(c.created_at)}
+                  {c.enviado_at && ` · Enviado ${fechaCorta(c.enviado_at)}`}
+                </p>
                 {c.monto_usd > 0 && (
                   <p style={{ fontSize: 12, fontWeight: 700, color: TEAL, margin: '4px 0 0' }}>USD {c.monto_usd.toLocaleString()}</p>
                 )}
