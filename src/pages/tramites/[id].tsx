@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
 import { supabase } from '../../lib/supabase'
 import emailjs from '@emailjs/browser'
+import { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, WidthType, HeadingLevel, AlignmentType } from 'docx'
 
 const TEAL = '#2dd4b0'
 const DARK2 = '#243044'
@@ -245,6 +246,75 @@ export default function TramiteDetalle() {
     }).eq('id', id)
     setSaving(false)
     loadTramite()
+  }
+
+  async function generarReporteWord() {
+    if (!tramite) return
+
+    // El historial viene ordenado del más nuevo al más viejo (para verlo en la app),
+    // pero el reporte tiene que leerse en orden cronológico: del primero al último.
+    const movsOrdenados = [...movimientos].reverse()
+
+    const filas = movsOrdenados.map(m => new TableRow({
+      children: [
+        new TableCell({ width: { size: 15, type: WidthType.PERCENTAGE }, children: [new Paragraph(new Date(m.created_at).toLocaleDateString('es-AR'))] }),
+        new TableCell({ width: { size: 25, type: WidthType.PERCENTAGE }, children: [new Paragraph(responsableLabel(m.pelota))] }),
+        new TableCell({ width: { size: 60, type: WidthType.PERCENTAGE }, children: [new Paragraph(m.nota || estadoLabel(m.estado))] }),
+      ],
+    }))
+
+    const filaHeader = new TableRow({
+      tableHeader: true,
+      children: [
+        new TableCell({ width: { size: 15, type: WidthType.PERCENTAGE }, children: [new Paragraph({ children: [new TextRun({ text: 'Fecha', bold: true })] })] }),
+        new TableCell({ width: { size: 25, type: WidthType.PERCENTAGE }, children: [new Paragraph({ children: [new TextRun({ text: 'Área responsable', bold: true })] })] }),
+        new TableCell({ width: { size: 60, type: WidthType.PERCENTAGE }, children: [new Paragraph({ children: [new TextRun({ text: 'Movimiento', bold: true })] })] }),
+      ],
+    })
+
+    const doc = new Document({
+      sections: [{
+        children: [
+          new Paragraph({
+            heading: HeadingLevel.HEADING_1,
+            alignment: AlignmentType.CENTER,
+            children: [new TextRun({ text: `${tramite.tramite?.toUpperCase() || 'TRÁMITE'} — ${tramite.domicilio || tramite.nombre}` })],
+          }),
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            children: [new TextRun({ text: tramite.municipio || '', size: 22 })],
+          }),
+          ...(tramite.n_expediente ? [new Paragraph({
+            alignment: AlignmentType.CENTER,
+            children: [new TextRun({ text: `Expediente Municipal N.º ${tramite.n_expediente}`, size: 22 })],
+          })] : []),
+          new Paragraph({ text: '' }),
+          new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [filaHeader, ...filas] }),
+          new Paragraph({ text: '' }),
+          new Paragraph({
+            heading: HeadingLevel.HEADING_2,
+            children: [new TextRun({ text: 'CONCLUSIÓN' })],
+          }),
+          new Paragraph({
+            children: [new TextRun({
+              text: tramite.finalizado
+                ? `Trámite finalizado. El expediente tuvo ${movimientos.length} movimientos registrados desde su inicio.`
+                : `Trámite en curso, con ${movimientos.length} movimientos registrados hasta la fecha.`
+            })],
+          }),
+        ],
+      }],
+    })
+
+    const blob = await Packer.toBlob(doc)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `Movimientos_${tramite.numero_p || tramite.nombre}.docx`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   function notificarWhatsApp() {
@@ -571,14 +641,22 @@ export default function TramiteDetalle() {
 
         {/* HISTORIAL */}
         <div>
-          <button onClick={() => setHistorialAbierto(!historialAbierto)} style={{
-            width: '100%', background: DARK2, borderRadius: 14, border: `1.5px solid ${BORDER}`,
-            padding: 14, textAlign: 'left', marginBottom: 8
-          }}>
-            <p style={{ fontSize: 12, fontWeight: 600, margin: 0, color: 'rgba(255,255,255,0.5)' }}>
-              Historial ({movimientos.length}) {historialAbierto ? '↑' : '↓'}
-            </p>
-          </button>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            <button onClick={() => setHistorialAbierto(!historialAbierto)} style={{
+              flex: 1, background: DARK2, borderRadius: 14, border: `1.5px solid ${BORDER}`,
+              padding: 14, textAlign: 'left'
+            }}>
+              <p style={{ fontSize: 12, fontWeight: 600, margin: 0, color: 'rgba(255,255,255,0.5)' }}>
+                Historial ({movimientos.length}) {historialAbierto ? '↑' : '↓'}
+              </p>
+            </button>
+            {movimientos.length > 0 && (
+              <button onClick={generarReporteWord} style={{
+                flexShrink: 0, background: 'rgba(45,212,176,0.1)', borderRadius: 14, border: '1.5px solid rgba(45,212,176,0.3)',
+                padding: '14px 16px', color: TEAL, fontSize: 12, fontWeight: 600
+              }}>📄 Reporte</button>
+            )}
+          </div>
 
           {historialAbierto && (
             <div style={{ display: 'grid', gap: 8 }}>
