@@ -7,6 +7,15 @@ const DARK2 = '#243044'
 const BORDER = 'rgba(255,255,255,0.08)'
 const FER_PHONE = '5491144379907'
 
+const CATEGORIAS_MOTIVO = [
+  { key: 'precio', label: 'Precio' },
+  { key: 'demora', label: 'Tiempo de respuesta' },
+  { key: 'otro_estudio', label: 'Eligió otro estudio' },
+  { key: 'se_cayo_obra', label: 'Se cayó la obra' },
+  { key: 'no_responde', label: 'No responde' },
+  { key: 'otro', label: 'Otro' },
+]
+
 const MUNICIPIOS = ['San Isidro', 'Vicente López', 'Tigre', 'San Fernando']
 const TRAMITES = ['Permiso de construcción', 'Demolición total', 'Conforme a obra', 'Regularización', 'Consulta previa', 'Estudio de factibilidad']
 
@@ -41,6 +50,8 @@ type Consulta = {
   archivos: string[]
   motivo_cancelacion: string
   motivo_rechazo: string
+  motivo_cancelacion_categoria: string
+  motivo_rechazo_categoria: string
   monto_usd: number
   anticipo_usd: number
   segunda_cuota_usd: number
@@ -72,6 +83,8 @@ export default function ConsultaDetalle() {
   const [showBorrar, setShowBorrar] = useState(false)
   const [motivoCancelacion, setMotivoCancelacion] = useState('')
   const [motivoRechazo, setMotivoRechazo] = useState('')
+  const [categoriaCancelacion, setCategoriaCancelacion] = useState('')
+  const [categoriaRechazo, setCategoriaRechazo] = useState('')
   const [formVal, setFormVal] = useState({
     ajusta_cou: '', obs_presupuesto: '',
     derechos_estimados: '', aportes_estimados: '',
@@ -236,18 +249,18 @@ async function agregarNota() {
   }
 
   async function rechazar() {
-    if (!motivoRechazo) return
+    if (!motivoRechazo || !categoriaRechazo) return
     setSaving(true)
-    await supabase.from('consultas').update({ estado: 'rechazado', motivo_rechazo: motivoRechazo }).eq('id', id)
+    await supabase.from('consultas').update({ estado: 'rechazado', motivo_rechazo: motivoRechazo, motivo_rechazo_categoria: categoriaRechazo }).eq('id', id)
     setSaving(false)
     setShowRechazar(false)
     loadConsulta()
   }
 
   async function cancelar() {
-    if (!motivoCancelacion) return
+    if (!motivoCancelacion || !categoriaCancelacion) return
     setSaving(true)
-    await supabase.from('consultas').update({ estado: 'cancelado', motivo_cancelacion: motivoCancelacion }).eq('id', id)
+    await supabase.from('consultas').update({ estado: 'cancelado', motivo_cancelacion: motivoCancelacion, motivo_cancelacion_categoria: categoriaCancelacion }).eq('id', id)
     setSaving(false)
     setShowCancelar(false)
     loadConsulta()
@@ -275,6 +288,10 @@ async function agregarNota() {
   function fechaCorta(iso: string) {
     if (!iso) return ''
     return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+  }
+
+  function labelCategoriaMotivo(key: string) {
+    return CATEGORIAS_MOTIVO.find(c => c.key === key)?.label || key
   }
 
   if (!consulta) return (
@@ -569,10 +586,22 @@ async function agregarNota() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, zIndex: 100 }}>
           <div style={{ background: '#1a2332', borderRadius: 18, padding: 24, width: '100%', maxWidth: 360, border: `1.5px solid ${BORDER}` }}>
             <p style={{ fontSize: 15, fontWeight: 600, margin: '0 0 8px', color: '#fff' }}>¿Por qué rechazó?</p>
+            <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 6 }}>Categoría</label>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+              {CATEGORIAS_MOTIVO.map(c => (
+                <button key={c.key} onClick={() => setCategoriaRechazo(c.key)} style={{
+                  fontSize: 11, padding: '5px 10px', borderRadius: 20,
+                  border: `1.5px solid ${categoriaRechazo === c.key ? 'rgba(248,113,113,0.4)' : BORDER}`,
+                  background: categoriaRechazo === c.key ? 'rgba(248,113,113,0.15)' : 'transparent',
+                  color: categoriaRechazo === c.key ? '#f87171' : 'rgba(255,255,255,0.5)'
+                }}>{c.label}</button>
+              ))}
+            </div>
+            <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Detalle</label>
             <textarea value={motivoRechazo} onChange={e => setMotivoRechazo(e.target.value)} placeholder="Ej: precio alto, eligió otro estudio..." style={{ minHeight: 72, marginBottom: 14 }} />
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <button onClick={() => setShowRechazar(false)} style={{ padding: 10, fontSize: 13, color: 'rgba(255,255,255,0.5)', background: 'transparent', border: `1.5px solid ${BORDER}`, borderRadius: 10 }}>Volver</button>
-              <button onClick={rechazar} disabled={!motivoRechazo || saving} style={{ padding: 10, fontSize: 13, fontWeight: 600, background: '#f87171', color: '#fff', border: 'none', borderRadius: 10, opacity: !motivoRechazo ? 0.5 : 1 }}>Confirmar</button>
+              <button onClick={rechazar} disabled={!motivoRechazo || !categoriaRechazo || saving} style={{ padding: 10, fontSize: 13, fontWeight: 600, background: '#f87171', color: '#fff', border: 'none', borderRadius: 10, opacity: (!motivoRechazo || !categoriaRechazo) ? 0.5 : 1 }}>Confirmar</button>
             </div>
           </div>
         </div>
@@ -583,10 +612,22 @@ async function agregarNota() {
           <div style={{ background: '#1a2332', borderRadius: 18, padding: 24, width: '100%', maxWidth: 360, border: `1.5px solid ${BORDER}` }}>
             <p style={{ fontSize: 15, fontWeight: 600, margin: '0 0 8px', color: '#fff' }}>Cancelar consulta</p>
             <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', margin: '0 0 14px' }}>Queda registrada como cancelada.</p>
+            <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 6 }}>Categoría</label>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+              {CATEGORIAS_MOTIVO.map(c => (
+                <button key={c.key} onClick={() => setCategoriaCancelacion(c.key)} style={{
+                  fontSize: 11, padding: '5px 10px', borderRadius: 20,
+                  border: `1.5px solid ${categoriaCancelacion === c.key ? 'rgba(248,113,113,0.4)' : BORDER}`,
+                  background: categoriaCancelacion === c.key ? 'rgba(248,113,113,0.15)' : 'transparent',
+                  color: categoriaCancelacion === c.key ? '#f87171' : 'rgba(255,255,255,0.5)'
+                }}>{c.label}</button>
+              ))}
+            </div>
+            <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Detalle</label>
             <textarea value={motivoCancelacion} onChange={e => setMotivoCancelacion(e.target.value)} placeholder="Motivo..." style={{ minHeight: 64, marginBottom: 14 }} />
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <button onClick={() => setShowCancelar(false)} style={{ padding: 10, fontSize: 13, color: 'rgba(255,255,255,0.5)', background: 'transparent', border: `1.5px solid ${BORDER}`, borderRadius: 10 }}>Volver</button>
-              <button onClick={cancelar} disabled={!motivoCancelacion || saving} style={{ padding: 10, fontSize: 13, fontWeight: 600, background: '#f87171', color: '#fff', border: 'none', borderRadius: 10, opacity: !motivoCancelacion ? 0.5 : 1 }}>Cancelar</button>
+              <button onClick={cancelar} disabled={!motivoCancelacion || !categoriaCancelacion || saving} style={{ padding: 10, fontSize: 13, fontWeight: 600, background: '#f87171', color: '#fff', border: 'none', borderRadius: 10, opacity: (!motivoCancelacion || !categoriaCancelacion) ? 0.5 : 1 }}>Cancelar</button>
             </div>
           </div>
         </div>
