@@ -88,8 +88,17 @@ function fechaCorta(iso: string) {
   if (!iso) return ''
   return new Date(iso + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
 }
+function fechaLarga(iso: string) {
+  if (!iso) return ''
+  return new Date(iso + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+}
 function fmtUsd(n: number) {
   return n.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+}
+
+function parseMonto(str: string) {
+  const limpio = String(str).trim().replace(/\./g, '').replace(',', '.')
+  return parseFloat(limpio) || 0
 }
 
 export default function Finanzas() {
@@ -98,6 +107,7 @@ export default function Finanzas() {
   const [tab, setTab] = useState<'cobros' | 'gastos' | 'renta'>('cobros')
   const [mes, setMes] = useState(now.getMonth())
   const [anio, setAnio] = useState(now.getFullYear())
+  const [verTodo, setVerTodo] = useState(false)
 
   const [tramites, setTramites] = useState<Tramite[]>([])
   const [cobros, setCobros] = useState<Cobro[]>([])
@@ -119,7 +129,7 @@ export default function Finanzas() {
   })
 
   useEffect(() => { loadTramites() }, [])
-  useEffect(() => { loadMes() }, [mes, anio])
+  useEffect(() => { loadMes() }, [mes, anio, verTodo])
 
   async function loadTramites() {
     const { data } = await supabase.from('tramites').select('id, numero_p, nombre').order('numero_p', { ascending: false })
@@ -134,6 +144,14 @@ export default function Finanzas() {
 
   async function loadMes() {
     setLoading(true)
+    if (verTodo) {
+      const { data: c } = await supabase.from('finanzas_cobros').select('*').order('fecha', { ascending: false })
+      const { data: g } = await supabase.from('finanzas_gastos').select('*').order('fecha', { ascending: false })
+      setCobros(c || [])
+      setGastos(g || [])
+      setLoading(false)
+      return
+    }
     const { desde, hasta } = rangoMes()
     const { data: c } = await supabase.from('finanzas_cobros').select('*').gte('fecha', desde).lte('fecha', hasta).order('fecha', { ascending: false })
     const { data: g } = await supabase.from('finanzas_gastos').select('*').gte('fecha', desde).lte('fecha', hasta).order('fecha', { ascending: false })
@@ -143,9 +161,9 @@ export default function Finanzas() {
   }
 
   function calcMontoUsd(moneda: string, monto: string, tipoCambio: string) {
-    const m = parseFloat(monto) || 0
+    const m = parseMonto(monto)
     if (moneda === 'USD') return m
-    const tc = parseFloat(tipoCambio) || 0
+    const tc = parseMonto(tipoCambio)
     return tc > 0 ? m / tc : 0
   }
 
@@ -161,8 +179,8 @@ export default function Finanzas() {
       nombre_cliente: fc.tramiteManual ? (fc.nombreManual || null) : (tramite?.nombre || null),
       concepto: fc.concepto,
       moneda: fc.moneda,
-      monto: parseFloat(fc.monto),
-      tipo_cambio: fc.moneda === 'ARS' ? parseFloat(fc.tipo_cambio) : null,
+      monto: parseMonto(fc.monto),
+      tipo_cambio: fc.moneda === 'ARS' ? parseMonto(fc.tipo_cambio) : null,
       monto_usd,
       metodo: fc.metodo,
       notas: fc.notas || null,
@@ -187,8 +205,8 @@ export default function Finanzas() {
       tramite_id: fg.tramite_id || null,
       numero_p: tramite?.numero_p || null,
       moneda: fg.moneda,
-      monto: parseFloat(fg.monto),
-      tipo_cambio: fg.moneda === 'ARS' ? parseFloat(fg.tipo_cambio) : null,
+      monto: parseMonto(fg.monto),
+      tipo_cambio: fg.moneda === 'ARS' ? parseMonto(fg.tipo_cambio) : null,
       monto_usd,
       metodo: fg.metodo,
       notas: fg.notas || null,
@@ -231,11 +249,16 @@ export default function Finanzas() {
           ))}
         </div>
 
-        <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
-          <select value={mes} onChange={e => setMes(Number(e.target.value))} style={{ flex: 1 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 10 }}>
+          <input type="checkbox" checked={verTodo} onChange={e => setVerTodo(e.target.checked)} style={{ width: 16, height: 16 }} />
+          Ver todo lo cargado (sin filtrar por mes)
+        </label>
+
+        <div style={{ display: 'flex', gap: 6, marginBottom: 14, opacity: verTodo ? 0.4 : 1 }}>
+          <select value={mes} onChange={e => setMes(Number(e.target.value))} disabled={verTodo} style={{ flex: 1 }}>
             {MESES.map((m, i) => <option key={i} value={i}>{m}</option>)}
           </select>
-          <select value={anio} onChange={e => setAnio(Number(e.target.value))} style={{ width: 90 }}>
+          <select value={anio} onChange={e => setAnio(Number(e.target.value))} disabled={verTodo} style={{ width: 90 }}>
             {[2025, 2026, 2027].map(a => <option key={a} value={a}>{a}</option>)}
           </select>
         </div>
@@ -295,9 +318,9 @@ export default function Finanzas() {
                       </div>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: fc.moneda === 'ARS' ? '1fr 1fr' : '1fr', gap: 10 }}>
-                      <div><label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Monto ({fc.moneda === 'USD' ? 'USD' : '$'})</label><input type="number" value={fc.monto} onChange={e => setFc(f => ({ ...f, monto: e.target.value }))} placeholder="Ej: 1500" /></div>
+                      <div><label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Monto ({fc.moneda === 'USD' ? 'USD' : '$'})</label><input type="text" inputMode="decimal" value={fc.monto} onChange={e => setFc(f => ({ ...f, monto: e.target.value }))} placeholder="Ej: 1.500" /></div>
                       {fc.moneda === 'ARS' && (
-                        <div><label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>TC blue venta del día</label><input type="number" value={fc.tipo_cambio} onChange={e => setFc(f => ({ ...f, tipo_cambio: e.target.value }))} placeholder="Ej: 1500" /></div>
+                        <div><label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>TC blue venta del día</label><input type="text" inputMode="decimal" value={fc.tipo_cambio} onChange={e => setFc(f => ({ ...f, tipo_cambio: e.target.value }))} placeholder="Ej: 1500" /></div>
                       )}
                     </div>
                     {fc.moneda === 'ARS' && fc.monto && fc.tipo_cambio && (
@@ -329,7 +352,7 @@ export default function Finanzas() {
                 )}
 
                 {cobros.length === 0 ? (
-                  <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', textAlign: 'center', marginTop: 20 }}>Sin cobros este mes</p>
+                  <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', textAlign: 'center', marginTop: 20 }}>{verTodo ? 'Sin cobros cargados' : 'Sin cobros este mes'}</p>
                 ) : (
                   <div style={{ display: 'grid', gap: 8 }}>
                     {cobros.map(c => (
@@ -339,7 +362,7 @@ export default function Finanzas() {
                           <span style={{ fontSize: 13, fontWeight: 600, color: GREEN }}>USD {fmtUsd(c.monto_usd)}</span>
                         </div>
                         <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: '3px 0 0' }}>
-                          {labelConcepto(c.concepto)} · {fechaCorta(c.fecha)} · {labelMetodo(c.metodo)} {c.moneda === 'ARS' ? `$ (TC ${c.tipo_cambio})` : 'USD'}
+                          {labelConcepto(c.concepto)} · {verTodo ? fechaLarga(c.fecha) : fechaCorta(c.fecha)} · {labelMetodo(c.metodo)} {c.moneda === 'ARS' ? `$ (TC ${c.tipo_cambio})` : 'USD'}
                           {c.es_historico && ' · histórico'}
                         </p>
                         {c.notas && <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', margin: '3px 0 0', fontStyle: 'italic' }}>{c.notas}</p>}
@@ -391,9 +414,9 @@ export default function Finanzas() {
                       </div>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: fg.moneda === 'ARS' ? '1fr 1fr' : '1fr', gap: 10 }}>
-                      <div><label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Monto ({fg.moneda === 'USD' ? 'USD' : '$'})</label><input type="number" value={fg.monto} onChange={e => setFg(f => ({ ...f, monto: e.target.value }))} placeholder="Ej: 45000" /></div>
+                      <div><label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Monto ({fg.moneda === 'USD' ? 'USD' : '$'})</label><input type="text" inputMode="decimal" value={fg.monto} onChange={e => setFg(f => ({ ...f, monto: e.target.value }))} placeholder="Ej: 45.000" /></div>
                       {fg.moneda === 'ARS' && (
-                        <div><label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>TC del día</label><input type="number" value={fg.tipo_cambio} onChange={e => setFg(f => ({ ...f, tipo_cambio: e.target.value }))} placeholder="Ej: 1400" /></div>
+                        <div><label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>TC del día</label><input type="text" inputMode="decimal" value={fg.tipo_cambio} onChange={e => setFg(f => ({ ...f, tipo_cambio: e.target.value }))} placeholder="Ej: 1400" /></div>
                       )}
                     </div>
                     {fg.moneda === 'ARS' && fg.monto && fg.tipo_cambio && (
@@ -425,7 +448,7 @@ export default function Finanzas() {
                 )}
 
                 {gastos.length === 0 ? (
-                  <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', textAlign: 'center', marginTop: 20 }}>Sin gastos este mes</p>
+                  <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', textAlign: 'center', marginTop: 20 }}>{verTodo ? 'Sin gastos cargados' : 'Sin gastos este mes'}</p>
                 ) : (
                   <div style={{ display: 'grid', gap: 8 }}>
                     {gastos.map(g => (
@@ -435,7 +458,7 @@ export default function Finanzas() {
                           <span style={{ fontSize: 13, fontWeight: 600, color: CORAL }}>USD {fmtUsd(g.monto_usd)}</span>
                         </div>
                         <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: '3px 0 0' }}>
-                          {g.tipo === 'fijo' ? 'Fijo' : 'Variable'} · {fechaCorta(g.fecha)} · {labelMetodo(g.metodo)} {g.moneda === 'ARS' ? `$ (TC ${g.tipo_cambio})` : 'USD'}
+                          {g.tipo === 'fijo' ? 'Fijo' : 'Variable'} · {verTodo ? fechaLarga(g.fecha) : fechaCorta(g.fecha)} · {labelMetodo(g.metodo)} {g.moneda === 'ARS' ? `$ (TC ${g.tipo_cambio})` : 'USD'}
                           {g.es_historico && ' · histórico'}
                         </p>
                         {g.notas && <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', margin: '3px 0 0', fontStyle: 'italic' }}>{g.notas}</p>}
@@ -449,7 +472,7 @@ export default function Finanzas() {
             {tab === 'renta' && (
               <>
                 <div style={{ background: '#0f6e56', borderRadius: 12, padding: 14, marginBottom: 10 }}>
-                  <p style={{ fontSize: 11, color: '#9fe1cb', margin: '0 0 4px' }}>Rentabilidad neta</p>
+                  <p style={{ fontSize: 11, color: '#9fe1cb', margin: '0 0 4px' }}>{verTodo ? 'Rentabilidad acumulada (todo)' : 'Rentabilidad neta'}</p>
                   <p style={{ fontSize: 28, fontWeight: 700, color: '#fff', margin: 0 }}>USD {fmtUsd(neto)}</p>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
@@ -473,7 +496,7 @@ export default function Finanzas() {
                   </div>
                 </div>
                 {cobros.length === 0 && gastos.length === 0 && (
-                  <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', textAlign: 'center', marginTop: 16 }}>Sin movimientos cargados este mes</p>
+                  <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', textAlign: 'center', marginTop: 16 }}>{verTodo ? 'Todavía no cargaste nada' : 'Sin movimientos cargados este mes'}</p>
                 )}
               </>
             )}
