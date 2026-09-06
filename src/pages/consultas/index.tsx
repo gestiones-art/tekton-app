@@ -15,6 +15,14 @@ const ESTADOS: Record<string, { label: string, color: string, bg: string }> = {
   cancelado:   { label: 'Cancelado',       color: 'rgba(255,255,255,0.3)', bg: 'rgba(255,255,255,0.05)' },
 }
 
+const CATEGORIAS_MOTIVO: Record<string, string> = {
+  precio: 'Precio', demora: 'Tiempo de respuesta', otro_estudio: 'Eligió otro estudio',
+  se_cayo_obra: 'Se cayó la obra', no_responde: 'No responde', otro: 'Otro',
+}
+function labelCategoriaMotivo(key: string) {
+  return CATEGORIAS_MOTIVO[key] || key
+}
+
 type Consulta = {
   id: string
   numero_p: string
@@ -28,6 +36,8 @@ type Consulta = {
   monto_usd: number
   motivo_cancelacion: string
   motivo_rechazo: string
+  motivo_cancelacion_categoria: string
+  motivo_rechazo_categoria: string
 }
 
 function fechaCorta(iso: string) {
@@ -46,7 +56,7 @@ export default function Consultas() {
   async function loadConsultas() {
     const { data } = await supabase
       .from('consultas')
-      .select('id, numero_p, nombre, municipio, tramite, estado, created_at, enviado_at, fecha_aceptado, monto_usd, motivo_cancelacion, motivo_rechazo')
+      .select('id, numero_p, nombre, municipio, tramite, estado, created_at, enviado_at, fecha_aceptado, monto_usd, motivo_cancelacion, motivo_rechazo, motivo_cancelacion_categoria, motivo_rechazo_categoria')
       .order('created_at', { ascending: false })
     setConsultas(data || [])
     setLoading(false)
@@ -133,7 +143,10 @@ export default function Consultas() {
                   <p style={{ fontSize: 12, fontWeight: 700, color: TEAL, margin: '4px 0 0' }}>USD {c.monto_usd.toLocaleString()}</p>
                 )}
                 {(c.motivo_cancelacion || c.motivo_rechazo) && (
-                  <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', margin: '4px 0 0', fontStyle: 'italic' }}>{c.motivo_cancelacion || c.motivo_rechazo}</p>
+                  <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', margin: '4px 0 0', fontStyle: 'italic' }}>
+                    {c.motivo_cancelacion_categoria || c.motivo_rechazo_categoria ? `${labelCategoriaMotivo(c.motivo_cancelacion_categoria || c.motivo_rechazo_categoria)} — ` : ''}
+                    {c.motivo_cancelacion || c.motivo_rechazo}
+                  </p>
                 )}
               </button>
             )
