@@ -27,6 +27,10 @@ export default function Exportar() {
       setProgreso('Descargando cobros...')
       const { data: cobros } = await supabase.from('cobros').select('*').order('created_at')
 
+      setProgreso('Descargando finanzas...')
+      const { data: finanzasCobros } = await supabase.from('finanzas_cobros').select('*').order('fecha')
+      const { data: finanzasGastos } = await supabase.from('finanzas_gastos').select('*').order('fecha')
+
       setProgreso('Armando Excel...')
 
       const wb = XLSX.utils.book_new()
@@ -94,6 +98,7 @@ export default function Exportar() {
         'Plazo': c.plazo_dias || '',
         'Vigencia días': c.vigencia_dias || '',
         'Enviado': c.enviado_at ? new Date(c.enviado_at).toLocaleDateString('es-AR') : '',
+        'Aceptado': c.fecha_aceptado ? new Date(c.fecha_aceptado).toLocaleDateString('es-AR') : '',
         'Motivo cancelación': c.motivo_cancelacion || '',
         'Motivo rechazo': c.motivo_rechazo || '',
         'Obs presupuesto': c.obs_presupuesto || '',
@@ -107,12 +112,12 @@ export default function Exportar() {
         { wch: 10 }, { wch: 25 }, { wch: 18 }, { wch: 25 }, { wch: 15 },
         { wch: 25 }, { wch: 15 }, { wch: 40 }, { wch: 12 }, { wch: 12 },
         { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 12 }, { wch: 12 },
-        { wch: 25 }, { wch: 25 }, { wch: 40 }, { wch: 12 }, { wch: 15 },
-        { wch: 15 }, { wch: 12 }
+        { wch: 12 }, { wch: 25 }, { wch: 25 }, { wch: 40 }, { wch: 12 },
+        { wch: 15 }, { wch: 15 }, { wch: 12 }
       ]
       XLSX.utils.book_append_sheet(wb, wsConsultas, 'Consultas')
 
-      // ── HOJA 4: COBROS ──
+      // ── HOJA 4: COBROS (tabla vieja, sin uso activo) ──
       const cobrosLimpios = (cobros || []).map(c => ({
         'Trámite ID': c.tramite_id || '',
         'Número P': c.numero_p || '',
@@ -132,7 +137,53 @@ export default function Exportar() {
         { wch: 15 }, { wch: 15 }, { wch: 18 }, { wch: 12 },
         { wch: 12 }, { wch: 20 }, { wch: 12 }
       ]
-      XLSX.utils.book_append_sheet(wb, wsCobros, 'Cobros')
+      XLSX.utils.book_append_sheet(wb, wsCobros, 'Cobros (viejo)')
+
+      // ── HOJA 5: FINANZAS - COBROS ──
+      const finCobrosLimpios = (finanzasCobros || []).map(c => ({
+        'Fecha': c.fecha ? new Date(c.fecha + 'T00:00:00').toLocaleDateString('es-AR') : '',
+        'Número P': c.numero_p || '',
+        'Cliente': c.nombre_cliente || '',
+        'Concepto': c.concepto || '',
+        'Moneda': c.moneda || '',
+        'Monto': c.monto || '',
+        'Tipo de cambio': c.tipo_cambio || '',
+        'Monto USD': c.monto_usd || '',
+        'Método': c.metodo || '',
+        'TC real conversión': c.tipo_cambio_real || '',
+        'Fecha conversión': c.fecha_conversion ? new Date(c.fecha_conversion + 'T00:00:00').toLocaleDateString('es-AR') : '',
+        'Histórico': c.es_historico ? 'Sí' : '',
+        'Notas': c.notas || '',
+      }))
+      const wsFinCobros = XLSX.utils.json_to_sheet(finCobrosLimpios)
+      wsFinCobros['!cols'] = [
+        { wch: 12 }, { wch: 10 }, { wch: 25 }, { wch: 14 }, { wch: 10 },
+        { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 15 }, { wch: 16 },
+        { wch: 16 }, { wch: 10 }, { wch: 35 }
+      ]
+      XLSX.utils.book_append_sheet(wb, wsFinCobros, 'Finanzas-Cobros')
+
+      // ── HOJA 6: FINANZAS - GASTOS ──
+      const finGastosLimpios = (finanzasGastos || []).map(g => ({
+        'Fecha': g.fecha ? new Date(g.fecha + 'T00:00:00').toLocaleDateString('es-AR') : '',
+        'Categoría': g.categoria || '',
+        'Tipo': g.tipo || '',
+        'Número P': g.numero_p || '',
+        'Moneda': g.moneda || '',
+        'Monto': g.monto || '',
+        'Tipo de cambio': g.tipo_cambio || '',
+        'Monto USD': g.monto_usd || '',
+        'Método': g.metodo || '',
+        'Histórico': g.es_historico ? 'Sí' : '',
+        'Notas': g.notas || '',
+      }))
+      const wsFinGastos = XLSX.utils.json_to_sheet(finGastosLimpios)
+      wsFinGastos['!cols'] = [
+        { wch: 12 }, { wch: 18 }, { wch: 10 }, { wch: 10 }, { wch: 10 },
+        { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 16 }, { wch: 10 },
+        { wch: 35 }
+      ]
+      XLSX.utils.book_append_sheet(wb, wsFinGastos, 'Finanzas-Gastos')
 
       // ── DESCARGAR ──
 const fecha = new Date().toLocaleDateString('es-AR').replace(/\//g, '-')
@@ -170,9 +221,9 @@ URL.revokeObjectURL(url)
 
         <div style={{ background: DARK2, borderRadius: 14, border: `1.5px solid ${BORDER}`, padding: 24, marginBottom: 16 }}>
           <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', margin: '0 0 16px', lineHeight: 1.6 }}>
-            Descarga un Excel con 4 solapas:
+            Descarga un Excel con 6 solapas:
           </p>
-          {['📁 Trámites — todos los expedientes activos e históricos', '📋 Movimientos — historial completo de cada expediente', '💬 Consultas — consultas y presupuestos', '💰 Cobros — registro de pagos'].map((item, i) => (
+          {['📁 Trámites — todos los expedientes activos e históricos', '📋 Movimientos — historial completo de cada expediente', '💬 Consultas — consultas y presupuestos', '💰 Cobros (viejo) — tabla anterior sin uso activo', '💵 Finanzas-Cobros — cobros reales con moneda y tipo de cambio', '📉 Finanzas-Gastos — gastos fijos y variables'].map((item, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
               <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>{item}</span>
             </div>
