@@ -56,6 +56,7 @@ type Cobro = {
   monto_usd: number
   metodo: string
   notas: string | null
+  es_historico: boolean
 }
 
 type Gasto = {
@@ -71,6 +72,7 @@ type Gasto = {
   monto_usd: number
   metodo: string
   notas: string | null
+  es_historico: boolean
 }
 
 function labelCategoria(key: string) {
@@ -108,11 +110,12 @@ export default function Finanzas() {
 
   const [fc, setFc] = useState({
     fecha: new Date().toISOString().slice(0, 10),
-    tramite_id: '', concepto: 'anticipo', moneda: 'USD', monto: '', tipo_cambio: '', metodo: 'transferencia', notas: ''
+    tramite_id: '', tramiteManual: false, numeroPManual: '', nombreManual: '',
+    concepto: 'anticipo', moneda: 'USD', monto: '', tipo_cambio: '', metodo: 'transferencia', notas: '', es_historico: false
   })
   const [fg, setFg] = useState({
     fecha: new Date().toISOString().slice(0, 10),
-    categoria: 'alquiler_expensas', tramite_id: '', moneda: 'ARS', monto: '', tipo_cambio: '', metodo: 'transferencia', notas: ''
+    categoria: 'alquiler_expensas', tramite_id: '', moneda: 'ARS', monto: '', tipo_cambio: '', metodo: 'transferencia', notas: '', es_historico: false
   })
 
   useEffect(() => { loadTramites() }, [])
@@ -153,9 +156,9 @@ export default function Finanzas() {
     const monto_usd = calcMontoUsd(fc.moneda, fc.monto, fc.tipo_cambio)
     await supabase.from('finanzas_cobros').insert({
       fecha: fc.fecha,
-      tramite_id: fc.tramite_id || null,
-      numero_p: tramite?.numero_p || null,
-      nombre_cliente: tramite?.nombre || null,
+      tramite_id: fc.tramiteManual ? null : (fc.tramite_id || null),
+      numero_p: fc.tramiteManual ? (fc.numeroPManual || null) : (tramite?.numero_p || null),
+      nombre_cliente: fc.tramiteManual ? (fc.nombreManual || null) : (tramite?.nombre || null),
       concepto: fc.concepto,
       moneda: fc.moneda,
       monto: parseFloat(fc.monto),
@@ -163,10 +166,11 @@ export default function Finanzas() {
       monto_usd,
       metodo: fc.metodo,
       notas: fc.notas || null,
+      es_historico: fc.es_historico,
     })
     setSaving(false)
     setFormCobroAbierto(false)
-    setFc({ fecha: new Date().toISOString().slice(0, 10), tramite_id: '', concepto: 'anticipo', moneda: 'USD', monto: '', tipo_cambio: '', metodo: 'transferencia', notas: '' })
+    setFc({ fecha: new Date().toISOString().slice(0, 10), tramite_id: '', tramiteManual: false, numeroPManual: '', nombreManual: '', concepto: 'anticipo', moneda: 'USD', monto: '', tipo_cambio: '', metodo: 'transferencia', notas: '', es_historico: false })
     loadMes()
   }
 
@@ -188,10 +192,11 @@ export default function Finanzas() {
       monto_usd,
       metodo: fg.metodo,
       notas: fg.notas || null,
+      es_historico: fg.es_historico,
     })
     setSaving(false)
     setFormGastoAbierto(false)
-    setFg({ fecha: new Date().toISOString().slice(0, 10), categoria: 'alquiler_expensas', tramite_id: '', moneda: 'ARS', monto: '', tipo_cambio: '', metodo: 'transferencia', notas: '' })
+    setFg({ fecha: new Date().toISOString().slice(0, 10), categoria: 'alquiler_expensas', tramite_id: '', moneda: 'ARS', monto: '', tipo_cambio: '', metodo: 'transferencia', notas: '', es_historico: false })
     loadMes()
   }
 
@@ -258,11 +263,23 @@ export default function Finanzas() {
                       </div>
                     </div>
                     <div>
-                      <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Trámite (opcional)</label>
-                      <select value={fc.tramite_id} onChange={e => setFc(f => ({ ...f, tramite_id: e.target.value }))}>
-                        <option value="">Sin asignar</option>
-                        {tramites.map(t => <option key={t.id} value={t.id}>{t.numero_p} · {t.nombre}</option>)}
-                      </select>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>Trámite</label>
+                        <button onClick={() => setFc(f => ({ ...f, tramiteManual: !f.tramiteManual, tramite_id: '' }))} style={{ fontSize: 10, color: TEAL, background: 'transparent', border: 'none', padding: 0 }}>
+                          {fc.tramiteManual ? 'Elegir de la lista' : 'No está en la app, escribir a mano'}
+                        </button>
+                      </div>
+                      {fc.tramiteManual ? (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 8 }}>
+                          <input value={fc.numeroPManual} onChange={e => setFc(f => ({ ...f, numeroPManual: e.target.value }))} placeholder="Ej: P0980" />
+                          <input value={fc.nombreManual} onChange={e => setFc(f => ({ ...f, nombreManual: e.target.value }))} placeholder="Nombre del cliente" />
+                        </div>
+                      ) : (
+                        <select value={fc.tramite_id} onChange={e => setFc(f => ({ ...f, tramite_id: e.target.value }))}>
+                          <option value="">Sin asignar</option>
+                          {tramites.map(t => <option key={t.id} value={t.id}>{t.numero_p} · {t.nombre}</option>)}
+                        </select>
+                      )}
                     </div>
                     <div>
                       <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 6 }}>Moneda recibida</label>
@@ -299,6 +316,14 @@ export default function Finanzas() {
                         ))}
                       </div>
                     </div>
+                    <div>
+                      <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Observación (opcional)</label>
+                      <input value={fc.notas} onChange={e => setFc(f => ({ ...f, notas: e.target.value }))} placeholder="Ej: pagó en dos partes" />
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
+                      <input type="checkbox" checked={fc.es_historico} onChange={e => setFc(f => ({ ...f, es_historico: e.target.checked }))} style={{ width: 16, height: 16 }} />
+                      Es un dato viejo que estoy reconstruyendo (no un cobro de hoy)
+                    </label>
                     <button onClick={guardarCobro} disabled={saving} style={{ padding: 10, fontSize: 13, fontWeight: 600, background: TEAL, color: '#1a2332', border: 'none', borderRadius: 10 }}>{saving ? 'Guardando...' : 'Guardar cobro'}</button>
                   </div>
                 )}
@@ -315,7 +340,9 @@ export default function Finanzas() {
                         </div>
                         <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: '3px 0 0' }}>
                           {labelConcepto(c.concepto)} · {fechaCorta(c.fecha)} · {labelMetodo(c.metodo)} {c.moneda === 'ARS' ? `$ (TC ${c.tipo_cambio})` : 'USD'}
+                          {c.es_historico && ' · histórico'}
                         </p>
+                        {c.notas && <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', margin: '3px 0 0', fontStyle: 'italic' }}>{c.notas}</p>}
                       </div>
                     ))}
                   </div>
@@ -385,6 +412,14 @@ export default function Finanzas() {
                         ))}
                       </div>
                     </div>
+                    <div>
+                      <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Observación (opcional)</label>
+                      <input value={fg.notas} onChange={e => setFg(f => ({ ...f, notas: e.target.value }))} placeholder="Ej: reposición de cartuchos" />
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
+                      <input type="checkbox" checked={fg.es_historico} onChange={e => setFg(f => ({ ...f, es_historico: e.target.checked }))} style={{ width: 16, height: 16 }} />
+                      Es un dato viejo que estoy reconstruyendo (no un gasto de hoy)
+                    </label>
                     <button onClick={guardarGasto} disabled={saving} style={{ padding: 10, fontSize: 13, fontWeight: 600, background: TEAL, color: '#1a2332', border: 'none', borderRadius: 10 }}>{saving ? 'Guardando...' : 'Guardar gasto'}</button>
                   </div>
                 )}
@@ -401,7 +436,9 @@ export default function Finanzas() {
                         </div>
                         <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: '3px 0 0' }}>
                           {g.tipo === 'fijo' ? 'Fijo' : 'Variable'} · {fechaCorta(g.fecha)} · {labelMetodo(g.metodo)} {g.moneda === 'ARS' ? `$ (TC ${g.tipo_cambio})` : 'USD'}
+                          {g.es_historico && ' · histórico'}
                         </p>
+                        {g.notas && <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', margin: '3px 0 0', fontStyle: 'italic' }}>{g.notas}</p>}
                       </div>
                     ))}
                   </div>
