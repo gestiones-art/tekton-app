@@ -100,7 +100,9 @@ export default function Exportar() {
         'Enviado': c.enviado_at ? new Date(c.enviado_at).toLocaleDateString('es-AR') : '',
         'Aceptado': c.fecha_aceptado ? new Date(c.fecha_aceptado).toLocaleDateString('es-AR') : '',
         'Motivo cancelación': c.motivo_cancelacion || '',
+        'Categoría cancelación': c.motivo_cancelacion_categoria || '',
         'Motivo rechazo': c.motivo_rechazo || '',
+        'Categoría rechazo': c.motivo_rechazo_categoria || '',
         'Obs presupuesto': c.obs_presupuesto || '',
         'Ajusta COU': c.ajusta_cou || '',
         'Derechos est. USD': c.derechos_estimados || '',
@@ -112,8 +114,8 @@ export default function Exportar() {
         { wch: 10 }, { wch: 25 }, { wch: 18 }, { wch: 25 }, { wch: 15 },
         { wch: 25 }, { wch: 15 }, { wch: 40 }, { wch: 12 }, { wch: 12 },
         { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 12 }, { wch: 12 },
-        { wch: 12 }, { wch: 25 }, { wch: 25 }, { wch: 40 }, { wch: 12 },
-        { wch: 15 }, { wch: 15 }, { wch: 12 }
+        { wch: 12 }, { wch: 25 }, { wch: 18 }, { wch: 25 }, { wch: 18 },
+        { wch: 40 }, { wch: 12 }, { wch: 15 }, { wch: 15 }, { wch: 12 }
       ]
       XLSX.utils.book_append_sheet(wb, wsConsultas, 'Consultas')
 
