@@ -101,6 +101,15 @@ function parseMonto(str: string) {
   return parseFloat(limpio) || 0
 }
 
+function fechaPorDefecto(anio: number, mes: number) {
+  const hoy = new Date()
+  if (anio === hoy.getFullYear() && mes === hoy.getMonth()) {
+    return hoy.toISOString().slice(0, 10)
+  }
+  const mm = String(mes + 1).padStart(2, '0')
+  return `${anio}-${mm}-01`
+}
+
 export default function Finanzas() {
   const router = useRouter()
   const now = new Date()
@@ -231,6 +240,7 @@ export default function Finanzas() {
   const gastosFijos = gastos.filter(g => g.tipo === 'fijo').reduce((s, g) => s + (g.monto_usd || 0), 0)
   const gastosVariables = gastos.filter(g => g.tipo === 'variable').reduce((s, g) => s + (g.monto_usd || 0), 0)
   const neto = totalIngresos - totalGastos
+  const clientesNuevos = cobros.filter(c => c.concepto === 'anticipo').length
 
   return (
     <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -277,7 +287,10 @@ export default function Finanzas() {
           <>
             {tab === 'cobros' && (
               <>
-                <button onClick={() => setFormCobroAbierto(!formCobroAbierto)} style={{
+                <button onClick={() => {
+                  if (!formCobroAbierto) setFc(f => ({ ...f, fecha: fechaPorDefecto(anio, mes) }))
+                  setFormCobroAbierto(!formCobroAbierto)
+                }} style={{
                   width: '100%', padding: 10, fontSize: 13, fontWeight: 600, marginBottom: 10,
                   background: formCobroAbierto ? 'transparent' : TEAL, color: formCobroAbierto ? 'rgba(255,255,255,0.5)' : '#04342c',
                   border: formCobroAbierto ? `1.5px solid ${BORDER}` : 'none', borderRadius: 10
@@ -383,7 +396,10 @@ export default function Finanzas() {
 
             {tab === 'gastos' && (
               <>
-                <button onClick={() => setFormGastoAbierto(!formGastoAbierto)} style={{
+                <button onClick={() => {
+                  if (!formGastoAbierto) setFg(f => ({ ...f, fecha: fechaPorDefecto(anio, mes) }))
+                  setFormGastoAbierto(!formGastoAbierto)
+                }} style={{
                   width: '100%', padding: 10, fontSize: 13, fontWeight: 600, marginBottom: 10,
                   background: formGastoAbierto ? 'transparent' : TEAL, color: formGastoAbierto ? 'rgba(255,255,255,0.5)' : '#04342c',
                   border: formGastoAbierto ? `1.5px solid ${BORDER}` : 'none', borderRadius: 10
@@ -502,6 +518,10 @@ export default function Finanzas() {
                     <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>Gastos variables</span>
                     <span style={{ fontSize: 12, color: '#fff' }}>USD {fmtUsd(gastosVariables)}</span>
                   </div>
+                </div>
+                <div style={{ background: DARK2, borderRadius: 10, padding: '10px 12px', marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>Clientes nuevos {verTodo ? '(total)' : 'este mes'}</span>
+                  <span style={{ fontSize: 18, fontWeight: 700, color: TEAL }}>{clientesNuevos}</span>
                 </div>
                 {cobros.length === 0 && gastos.length === 0 && (
                   <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', textAlign: 'center', marginTop: 16 }}>{verTodo ? 'Todavía no cargaste nada' : 'Sin movimientos cargados este mes'}</p>
