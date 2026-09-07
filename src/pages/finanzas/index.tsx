@@ -172,7 +172,7 @@ export default function Finanzas() {
     setSaving(true)
     const tramite = tramites.find(t => t.id === fc.tramite_id)
     const monto_usd = calcMontoUsd(fc.moneda, fc.monto, fc.tipo_cambio)
-    await supabase.from('finanzas_cobros').insert({
+    const { error } = await supabase.from('finanzas_cobros').insert({
       fecha: fc.fecha,
       tramite_id: fc.tramiteManual ? null : (fc.tramite_id || null),
       numero_p: fc.tramiteManual ? (fc.numeroPManual || null) : (tramite?.numero_p || null),
@@ -187,6 +187,10 @@ export default function Finanzas() {
       es_historico: fc.es_historico,
     })
     setSaving(false)
+    if (error) {
+      alert('No se pudo guardar: ' + error.message)
+      return
+    }
     setFormCobroAbierto(false)
     setFc({ fecha: new Date().toISOString().slice(0, 10), tramite_id: '', tramiteManual: false, numeroPManual: '', nombreManual: '', concepto: 'anticipo', moneda: 'USD', monto: '', tipo_cambio: '', metodo: 'transferencia', notas: '', es_historico: false })
     loadMes()
@@ -198,7 +202,7 @@ export default function Finanzas() {
     const esFijo = CATEGORIAS_FIJAS.some(c => c.key === fg.categoria)
     const tramite = tramites.find(t => t.id === fg.tramite_id)
     const monto_usd = calcMontoUsd(fg.moneda, fg.monto, fg.tipo_cambio)
-    await supabase.from('finanzas_gastos').insert({
+    const { error } = await supabase.from('finanzas_gastos').insert({
       fecha: fg.fecha,
       categoria: fg.categoria,
       tipo: esFijo ? 'fijo' : 'variable',
@@ -213,6 +217,10 @@ export default function Finanzas() {
       es_historico: fg.es_historico,
     })
     setSaving(false)
+    if (error) {
+      alert('No se pudo guardar: ' + error.message)
+      return
+    }
     setFormGastoAbierto(false)
     setFg({ fecha: new Date().toISOString().slice(0, 10), categoria: 'alquiler_expensas', tramite_id: '', moneda: 'ARS', monto: '', tipo_cambio: '', metodo: 'transferencia', notas: '', es_historico: false })
     loadMes()
