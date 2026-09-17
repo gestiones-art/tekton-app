@@ -9,9 +9,14 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 function normalizar(texto: string): string {
   return texto
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // saca acentos
+    .replace(/[\u0300-\u036f]/g, '')
     .toUpperCase()
     .trim();
+}
+
+function extraerExpediente(asunto: string): string | null {
+  const match = asunto.match(/(?:Exp(?:te)?\.?\s*N?°?\s*|N[uú]mero:\s*)(\d+)/i);
+  return match ? match[1] : null;
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -20,9 +25,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(401).json({ error: 'No autorizado' });
   }
 
-  const expedienteRaw = (req.query.expediente as string) || '';
-  const texto = (req.query.texto as string) || '';
-  const expedienteNumero = expedienteRaw.match(/\d+/)?.[0];
+  const asunto = (req.query.asunto as string) || '';
+  const expedienteDirecto = (req.query.expediente as string) || '';
+  const expedienteNumero = extraerExpediente(asunto) || expedienteDirecto.match(/\d+/)?.[0];
 
   let tramite: any = null;
 
@@ -35,14 +40,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (data && data.length > 0) tramite = data[0];
   }
 
-  if (!tramite && texto) {
+  if (!tramite && asunto) {
     const { data: candidatos } = await supabase
       .from('tramites')
       .select('nombre, municipio, numero_p, n_expediente, domicilio')
       .eq('finalizado', false);
 
     if (candidatos) {
-      const textoNorm = normalizar(texto);
+      const textoNorm = normalizar(asunto);
       tramite = candidatos.find((t) =>
         (t.nombre && textoNorm.includes(normalizar(t.nombre))) ||
         (t.domicilio && textoNorm.includes(normalizar(t.domicilio)))
