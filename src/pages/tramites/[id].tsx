@@ -1,10 +1,18 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
 import { supabase } from '../../lib/supabase'
+import emailjs from '@emailjs/browser'
+import { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, WidthType, HeadingLevel, AlignmentType } from 'docx'
 
 const TEAL = '#2dd4b0'
 const DARK2 = '#243044'
 const BORDER = 'rgba(255,255,255,0.08)'
+const FER_PHONE = '5491144379907'
+const SILVINA_PHONE = '5491169988414'
+
+const EMAILJS_SERVICE = 'service_ohnptcb'
+const EMAILJS_TEMPLATE = 'template_7rlyyxg'
+const EMAILJS_KEY = 'kkXRFtV1dayNyumI2'
 
 const SUBESTADOS_TECNICA = [
   { key: 'dibujo', label: '✏️ Dibujo' },
@@ -69,7 +77,8 @@ type Tramite = {
   costo_dibujo: number
   fecha_entrega_dibujo: string
   checklist: Record<string, boolean>
-  carpeta_dropbox: string
+  finalizado: boolean
+  finalizado_at: string
 }
 
 type Movimiento = {
@@ -97,9 +106,11 @@ export default function TramiteDetalle() {
   const [editN, setEditN] = useState({
     parcelaria: '', expediente: '', dibujante: '',
     costo_dibujo: '', fecha_entrega: '',
-    domicilio: '', celular: '', carpeta_dropbox: ''
+    domicilio: '', celular: '', firma: ''
   })
   const [saving, setSaving] = useState(false)
+  const [notificacionPendiente, setNotificacionPendiente] = useState<null | 'tecnica' | 'admin'>(null)
+  const [showConfirmFinalizar, setShowConfirmFinalizar] = useState(false)
 
   useEffect(() => {
     if (id) { loadTramite(); loadMovimientos() }
@@ -118,7 +129,7 @@ export default function TramiteDetalle() {
         fecha_entrega: data.fecha_entrega_dibujo || '',
         domicilio: data.domicilio || '',
         celular: data.celular || '',
-        carpeta_dropbox: data.carpeta_dropbox || ''
+        firma: data.firma || ''
       })
     }
   }
@@ -132,6 +143,8 @@ export default function TramiteDetalle() {
     if (!nuevaNota && !nuevoSubestado) return
     setSaving(true)
     const estadoFinal = nuevoSubestado || tramite?.estado_actual || ''
+    const responsableAnterior = tramite?.pelota || 'admin'
+
     await supabase.from('movimientos').insert({
       tramite_id: id, estado: estadoFinal, nota: nuevaNota,
       pelota: nuevoResponsable, registrado_por: 'admin',
@@ -143,9 +156,175 @@ export default function TramiteDetalle() {
       ultima_nota: nuevaNota,
       ultima_accion_at: new Date().toISOString(),
     }).eq('id', id)
+
+    setTramite(prev => prev ? {
+      ...prev,
+      estado_actual: estadoFinal,
+      pelota: nuevoResponsable,
+      ultima_nota: nuevaNota,
+      ultima_accion_at: new Date().toISOString(),
+    } : prev)
+
+    const pasaATecnica = nuevoResponsable === 'tecnica' && responsableAnterior !== 'tecnica'
+    const pasaAAdmin = nuevoResponsable === 'admin' && responsableAnterior === 'tecnica'
+
+    if (pasaATecnica || pasaAAdmin) {
+      const asunto = pasaATecnica
+        ? `Nuevo trámite para técnica — ${tramite?.numero_p} ${tramite?.nombre}`
+        : `Técnica devuelve a admin — ${tramite?.numero_p} ${tramite?.nombre}`
+      const mensaje = pasaATecnica
+        ? `Hola Fer,\n\nSe asignó un trámite a técnica:\n\n📋 ${tramite?.numero_p} — ${tramite?.nombre}\n📍 ${tramite?.domicilio || ''} · ${tramite?.municipio || ''}\n🔧 ${tramite?.tramite || ''}\n📝 Estado: ${estadoLabel(estadoFinal)}\n\n💬 Nota: ${nuevaNota}\n\nhttps://tekton-app-nuevo.vercel.app/tramites/${id}`
+        : `Hola Silvina,\n\nTécnica devuelve un trámite a administración:\n\n📋 ${tramite?.numero_p} — ${tramite?.nombre}\n📍 ${tramite?.domicilio || ''} · ${tramite?.municipio || ''}\n🔧 ${tramite?.tramite || ''}\n📝 Estado: ${estadoLabel(estadoFinal)}\n\n💬 Nota: ${nuevaNota}\n\nhttps://tekton-app-nuevo.vercel.app/tramites/${id}`
+
+      try {
+        await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
+          asunto, mensaje, name: 'Tekton App', email: 'gestiones@estudiotekton.com',
+        }, EMAILJS_KEY)
+      } catch (e) {
+        console.error('Error enviando mail:', e)
+      }
+    }
+
+    if (pasaATecnica) setNotificacionPendiente('tecnica')
+    else if (pasaAAdmin) setNotificacionPendiente('admin')
+    else setNotificacionPendiente(null)
+
     setNuevaNota(''); setNuevoSubestado(''); setNuevoLink('')
     setSaving(false)
-    loadTramite(); loadMovimientos()
+    loadMovimientos()
+  }
+
+  async function finalizarTramite() {
+    setSaving(true)
+    await supabase.from('tramites').update({
+      finalizado: true,
+      finalizado_at: new Date().toISOString(),
+      pelota: 'admin',
+      ultima_nota: 'Trámite finalizado',
+      ultima_accion_at: new Date().toISOString(),
+    }).eq('id', id)
+    await supabase.from('movimientos').insert({
+      tramite_id: id,
+      estado: 'finalizado',
+      nota: 'Trámite finalizado',
+      pelota: 'admin',
+      registrado_por: 'admin',
+    })
+    setSaving(false)
+    setShowConfirmFinalizar(false)
+    loadTramite()
+    loadMovimientos()
+  }
+
+  async function reabrirTramite() {
+    setSaving(true)
+    await supabase.from('tramites').update({
+      finalizado: false,
+      finalizado_at: null,
+    }).eq('id', id)
+    setSaving(false)
+    loadTramite()
+  }
+
+  async function pausarTramite() {
+    setSaving(true)
+    await supabase.from('tramites').update({
+      estado_actual: 'en_pausa', pelota: 'admin', ultima_accion_at: new Date().toISOString()
+    }).eq('id', id)
+    await supabase.from('movimientos').insert({
+      tramite_id: id, estado: 'en_pausa', nota: 'Trámite pausado', pelota: 'admin', registrado_por: 'admin'
+    })
+    setSaving(false)
+    loadTramite()
+    loadMovimientos()
+  }
+
+  async function reactivarTramite() {
+    setSaving(true)
+    await supabase.from('tramites').update({
+      estado_actual: 'dibujo', pelota: 'admin', ultima_accion_at: new Date().toISOString()
+    }).eq('id', id)
+    setSaving(false)
+    loadTramite()
+  }
+
+  async function generarReporteWord() {
+    if (!tramite) return
+
+    const movsOrdenados = [...movimientos].reverse()
+
+    const filas = movsOrdenados.map(m => new TableRow({
+      children: [
+        new TableCell({ width: { size: 15, type: WidthType.PERCENTAGE }, children: [new Paragraph(new Date(m.created_at).toLocaleDateString('es-AR'))] }),
+        new TableCell({ width: { size: 25, type: WidthType.PERCENTAGE }, children: [new Paragraph(responsableLabel(m.pelota))] }),
+        new TableCell({ width: { size: 60, type: WidthType.PERCENTAGE }, children: [new Paragraph(m.nota || estadoLabel(m.estado))] }),
+      ],
+    }))
+
+    const filaHeader = new TableRow({
+      tableHeader: true,
+      children: [
+        new TableCell({ width: { size: 15, type: WidthType.PERCENTAGE }, children: [new Paragraph({ children: [new TextRun({ text: 'Fecha', bold: true })] })] }),
+        new TableCell({ width: { size: 25, type: WidthType.PERCENTAGE }, children: [new Paragraph({ children: [new TextRun({ text: 'Área responsable', bold: true })] })] }),
+        new TableCell({ width: { size: 60, type: WidthType.PERCENTAGE }, children: [new Paragraph({ children: [new TextRun({ text: 'Movimiento', bold: true })] })] }),
+      ],
+    })
+
+    const doc = new Document({
+      sections: [{
+        children: [
+          new Paragraph({
+            heading: HeadingLevel.HEADING_1,
+            alignment: AlignmentType.CENTER,
+            children: [new TextRun({ text: `${tramite.tramite?.toUpperCase() || 'TRÁMITE'} — ${tramite.domicilio || tramite.nombre}` })],
+          }),
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            children: [new TextRun({ text: tramite.municipio || '', size: 22 })],
+          }),
+          ...(tramite.n_expediente ? [new Paragraph({
+            alignment: AlignmentType.CENTER,
+            children: [new TextRun({ text: `Expediente Municipal N.º ${tramite.n_expediente}`, size: 22 })],
+          })] : []),
+          new Paragraph({ text: '' }),
+          new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [filaHeader, ...filas] }),
+          new Paragraph({ text: '' }),
+          new Paragraph({
+            heading: HeadingLevel.HEADING_2,
+            children: [new TextRun({ text: 'CONCLUSIÓN' })],
+          }),
+          new Paragraph({
+            children: [new TextRun({
+              text: tramite.finalizado
+                ? `Trámite finalizado. El expediente tuvo ${movimientos.length} movimientos registrados desde su inicio.`
+                : `Trámite en curso, con ${movimientos.length} movimientos registrados hasta la fecha.`
+            })],
+          }),
+        ],
+      }],
+    })
+
+    const blob = await Packer.toBlob(doc)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `Movimientos_${tramite.numero_p || tramite.nombre}.docx`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  function notificarWhatsApp() {
+    if (!tramite || !notificacionPendiente) return
+    const esTecnica = notificacionPendiente === 'tecnica'
+    const phone = esTecnica ? FER_PHONE : SILVINA_PHONE
+    const estadoActual = estadoLabel(tramite.estado_actual)
+    const msg = esTecnica
+      ? `Hola Fer! 🔧 Nuevo trámite asignado a técnica:\n*${tramite.numero_p} — ${tramite.nombre}*\n${tramite.tramite} · ${tramite.municipio}\n📝 ${estadoActual}\n💬 ${tramite.ultima_nota}\nhttps://tekton-app-nuevo.vercel.app/tramites/${id}`
+      : `Hola Silvina! 📋 Técnica devuelve trámite:\n*${tramite.numero_p} — ${tramite.nombre}*\n${tramite.tramite} · ${tramite.municipio}\n📝 ${estadoActual}\n💬 ${tramite.ultima_nota}\nhttps://tekton-app-nuevo.vercel.app/tramites/${id}`
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank')
+    setNotificacionPendiente(null)
   }
 
   async function guardarNumerosYDibujante() {
@@ -159,7 +338,7 @@ export default function TramiteDetalle() {
       fecha_entrega_dibujo: editN.fecha_entrega,
       domicilio: editN.domicilio,
       celular: editN.celular,
-      carpeta_dropbox: editN.carpeta_dropbox,
+      firma: editN.firma,
     }).eq('id', id)
     setSaving(false)
     setEditandoDatos(false)
@@ -183,6 +362,7 @@ export default function TramiteDetalle() {
   }
 
   const estadoLabel = (key: string) => {
+    if (key === 'finalizado') return '✅ Finalizado'
     const norm = ESTADO_MAP[key] || key
     const todos = [...SUBESTADOS_TECNICA, ...SUBESTADOS_MUNICIPIO]
     return todos.find(s => s.key === norm)?.label || norm.replace(/_/g, ' ')
@@ -201,13 +381,15 @@ export default function TramiteDetalle() {
   )
 
   const tareasCompletadas = TAREAS_FINALES.filter(t => tramite.checklist?.[t.key]).length
+  const enPausa = tramite.estado_actual === 'en_pausa'
+  const responsableSinCambios = nuevoResponsable === (PELOTA_MAP[tramite.pelota] || tramite.pelota)
 
   return (
     <div style={{ background: '#1a2332', minHeight: '100vh', padding: '1.25rem 1rem 3rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
 
       {/* HEADER */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem', width: '100%', maxWidth: 480 }}>
-        <button onClick={() => router.push('/tramites')} style={{ width: 32, height: 32, background: 'rgba(255,255,255,0.06)', border: `1.5px solid ${BORDER}`, borderRadius: 8, color: 'rgba(255,255,255,0.6)', fontSize: 16 }}>←</button>
+        <button onClick={() => router.back()} style={{ width: 32, height: 32, background: 'rgba(255,255,255,0.06)', border: `1.5px solid ${BORDER}`, borderRadius: 8, color: 'rgba(255,255,255,0.6)', fontSize: 16 }}>←</button>
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {tramite.numero_p && <span style={{ fontSize: 12, fontWeight: 700, color: TEAL }}>{tramite.numero_p}</span>}
@@ -215,207 +397,309 @@ export default function TramiteDetalle() {
           </div>
           <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: 0 }}>{tramite.municipio} · {tramite.tramite}</p>
         </div>
-      </div>
-
-      {/* ESTADO ACTUAL */}
-      <div style={{ background: 'rgba(45,212,176,0.1)', borderRadius: 14, border: '1.5px solid rgba(45,212,176,0.35)', padding: 14, marginBottom: 12, width: '100%', maxWidth: 480 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-          <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(45,212,176,0.7)', letterSpacing: 1, textTransform: 'uppercase', margin: 0 }}>Estado actual</p>
-          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>{tramite.ultima_accion_at ? new Date(tramite.ultima_accion_at).toLocaleDateString('es-AR') : ''}</span>
-        </div>
-        <p style={{ fontSize: 15, fontWeight: 700, margin: '0 0 4px' }}>{estadoLabel(tramite.estado_actual)}</p>
-        {tramite.ultima_nota && (
-          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', margin: '0 0 10px', fontStyle: 'italic' }}>"{tramite.ultima_nota}"</p>
+        {tramite.finalizado && (
+          <span style={{ fontSize: 11, fontWeight: 700, background: 'rgba(74,222,128,0.15)', color: '#4ade80', padding: '3px 10px', borderRadius: 20 }}>✅ Finalizado</span>
         )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.06)', padding: '5px 10px', borderRadius: 20, width: 'fit-content' }}>
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: responsableColor(tramite.pelota) }} />
-          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Responsable: {responsableLabel(tramite.pelota)}</span>
-        </div>
       </div>
 
-      {/* DATOS DEL EXPEDIENTE */}
-      <div style={{ background: DARK2, borderRadius: 14, border: `1.5px solid ${BORDER}`, padding: 14, marginBottom: 12, width: '100%', maxWidth: 480 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.35)', letterSpacing: 1, textTransform: 'uppercase', margin: 0 }}>Datos del expediente</p>
-          <button onClick={() => setEditandoDatos(!editandoDatos)} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 20, border: `1.5px solid ${BORDER}`, background: 'transparent', color: 'rgba(255,255,255,0.4)' }}>
-            {editandoDatos ? 'Cancelar' : 'Editar'}
+      {/* NOTIFICACIÓN WHATSAPP PENDIENTE */}
+      {notificacionPendiente && (
+        <div style={{ width: '100%', maxWidth: 480, marginBottom: 12 }}>
+          <button onClick={notificarWhatsApp} style={{
+            width: '100%', padding: 14, fontSize: 14, fontWeight: 600,
+            background: 'rgba(37,211,102,0.15)', color: '#25d366',
+            border: '1.5px solid rgba(37,211,102,0.3)', borderRadius: 14
+          }}>
+            📲 {notificacionPendiente === 'tecnica' ? 'Notificar a Fer por WhatsApp' : 'Notificarme por WhatsApp'}
           </button>
         </div>
-        {editandoDatos ? (
-          <div style={{ display: 'grid', gap: 10 }}>
-            <div>
-              <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Domicilio de obra</label>
-              <input value={editN.domicilio} onChange={e => setEditN(n => ({ ...n, domicilio: e.target.value }))} placeholder="Ej: Rivadavia 1234" />
-            </div>
-            <div>
-              <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Celular</label>
-              <input value={editN.celular} onChange={e => setEditN(n => ({ ...n, celular: e.target.value }))} placeholder="Ej: 1155556666" />
-            </div>
-            <div>
-              <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Dibujante asignado</label>
-              <select value={editN.dibujante} onChange={e => setEditN(n => ({ ...n, dibujante: e.target.value }))}>
-                <option value="">Sin asignar</option>
-                {DIBUJANTES.map(d => <option key={d}>{d}</option>)}
-                <option value="otro">+ Escribir nombre...</option>
-              </select>
-              {editN.dibujante === 'otro' && (
-                <input value={dibujante_custom} onChange={e => setDibujanteCustom(e.target.value)} placeholder="Nombre del dibujante" style={{ marginTop: 6 }} />
-              )}
-            </div>
-            <div>
-              <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Número de parcelaria (Catastro)</label>
-              <input value={editN.parcelaria} onChange={e => setEditN(n => ({ ...n, parcelaria: e.target.value }))} placeholder="Ej: 310" />
-            </div>
-            <div>
-              <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Número de expediente (Obras Part.)</label>
-              <input value={editN.expediente} onChange={e => setEditN(n => ({ ...n, expediente: e.target.value }))} placeholder="Ej: 441-2026" />
-            </div>
-            <div>
-              <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>📁 Carpeta Dropbox</label>
-              <input value={editN.carpeta_dropbox} onChange={e => setEditN(n => ({ ...n, carpeta_dropbox: e.target.value }))} placeholder="Ej: AGUSTIN - LEUNDA" />
-            </div>
-            <button onClick={guardarNumerosYDibujante} disabled={saving} style={{ padding: 10, fontSize: 13, fontWeight: 600, background: TEAL, color: '#1a2332', border: 'none', borderRadius: 10 }}>
-              {saving ? 'Guardando...' : 'Guardar datos'}
-            </button>
-          </div>
-        ) : (
-          <div>
-            <Fila label="Domicilio" value={tramite.domicilio || '—'} />
-            <Fila label="Celular" value={tramite.celular || '—'} />
-            <Fila label="Dibujante" value={tramite.dibujante || '—'} />
-            {tramite.costo_dibujo > 0 && <Fila label="Costo dibujo" value={`USD ${tramite.costo_dibujo}`} />}
-            {tramite.fecha_entrega_dibujo && <Fila label="Entrega estimada" value={new Date(tramite.fecha_entrega_dibujo).toLocaleDateString('es-AR')} />}
-            <Fila label="Parcelaria" value={tramite.n_parcelaria || '—'} />
-            <Fila label="Exp. municipal" value={tramite.n_expediente || '—'} />
-            <Fila label="Firma" value={tramite.firma || '—'} />
-            <Fila label="📁 Dropbox" value={tramite.carpeta_dropbox || '—'} />
-          </div>
-        )}
-      </div>
+      )}
 
-      {/* TAREAS FINALES */}
-      <div style={{ background: DARK2, borderRadius: 14, border: `1.5px solid ${tareasCompletadas === TAREAS_FINALES.length ? 'rgba(74,222,128,0.3)' : BORDER}`, padding: 14, marginBottom: 12, width: '100%', maxWidth: 480 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.35)', letterSpacing: 1, textTransform: 'uppercase', margin: 0 }}>Tareas finales</p>
-          <span style={{ fontSize: 11, color: tareasCompletadas === TAREAS_FINALES.length ? '#4ade80' : 'rgba(255,255,255,0.35)' }}>
-            {tareasCompletadas}/{TAREAS_FINALES.length}
-          </span>
-        </div>
-        <div style={{ display: 'grid', gap: 8 }}>
-          {TAREAS_FINALES.map(item => {
-            const checked = tramite.checklist?.[item.key] || false
-            return (
-              <button key={item.key} onClick={() => toggleChecklist(item.key)} style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                background: checked ? 'rgba(74,222,128,0.08)' : 'rgba(255,255,255,0.03)',
-                border: `1.5px solid ${checked ? 'rgba(74,222,128,0.3)' : BORDER}`,
-                borderRadius: 10, padding: '10px 14px', textAlign: 'left', width: '100%'
-              }}>
-                <div style={{
-                  width: 20, height: 20, borderRadius: 6, flexShrink: 0,
-                  background: checked ? '#4ade80' : 'transparent',
-                  border: `2px solid ${checked ? '#4ade80' : 'rgba(255,255,255,0.2)'}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}>
-                  {checked && <span style={{ fontSize: 12, color: '#1a2332', fontWeight: 700 }}>✓</span>}
-                </div>
-                <span style={{ fontSize: 14, color: checked ? '#4ade80' : 'rgba(255,255,255,0.7)', fontWeight: checked ? 600 : 400, textDecoration: checked ? 'line-through' : 'none' }}>
-                  {item.label}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
+      <div style={{ width: '100%', maxWidth: 480, display: 'grid', gap: 12 }}>
 
-      {/* REGISTRAR MOVIMIENTO */}
-      <div style={{ background: DARK2, borderRadius: 14, border: `1.5px solid ${BORDER}`, padding: 14, marginBottom: 12, width: '100%', maxWidth: 480 }}>
-        <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.35)', letterSpacing: 1, textTransform: 'uppercase', margin: '0 0 12px' }}>Registrar movimiento</p>
-        <div style={{ display: 'grid', gap: 10 }}>
-          <div>
-            <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 6 }}>Responsable</label>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {RESPONSABLES.map(r => (
-                <button key={r.key} onClick={() => { setNuevoResponsable(r.key); setNuevoSubestado('') }} style={{
-                  fontSize: 11, padding: '5px 11px', borderRadius: 20,
-                  border: `1.5px solid ${nuevoResponsable === r.key ? 'rgba(45,212,176,0.4)' : BORDER}`,
-                  background: nuevoResponsable === r.key ? 'rgba(45,212,176,0.15)' : 'transparent',
-                  color: nuevoResponsable === r.key ? TEAL : 'rgba(255,255,255,0.5)'
-                }}>{r.label}</button>
-              ))}
-            </div>
+        {/* ESTADO ACTUAL */}
+        <div style={{ background: tramite.finalizado ? 'rgba(74,222,128,0.08)' : 'rgba(45,212,176,0.1)', borderRadius: 14, border: `1.5px solid ${tramite.finalizado ? 'rgba(74,222,128,0.3)' : 'rgba(45,212,176,0.35)'}`, padding: 14 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: tramite.finalizado ? '#4ade80' : 'rgba(45,212,176,0.7)', letterSpacing: 1, textTransform: 'uppercase', margin: 0 }}>Estado actual</p>
+            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>{tramite.ultima_accion_at ? new Date(tramite.ultima_accion_at).toLocaleDateString('es-AR') : ''}</span>
           </div>
-
-          {subestadosActuales.length > 0 && (
-            <div>
-              <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 6 }}>Subestado</label>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {subestadosActuales.map(s => (
-                  <button key={s.key} onClick={() => setNuevoSubestado(s.key)} style={{
-                    fontSize: 11, padding: '5px 11px', borderRadius: 20,
-                    border: `1.5px solid ${nuevoSubestado === s.key ? 'rgba(45,212,176,0.4)' : BORDER}`,
-                    background: nuevoSubestado === s.key ? 'rgba(45,212,176,0.15)' : 'transparent',
-                    color: nuevoSubestado === s.key ? TEAL : 'rgba(255,255,255,0.5)'
-                  }}>{s.label}</button>
-                ))}
-              </div>
+          <p style={{ fontSize: 15, fontWeight: 700, margin: '0 0 4px' }}>
+            {tramite.finalizado ? '✅ Finalizado' : estadoLabel(tramite.estado_actual)}
+          </p>
+          {tramite.finalizado && tramite.finalizado_at && (
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', margin: '0 0 8px' }}>
+              Cerrado el {new Date(tramite.finalizado_at).toLocaleDateString('es-AR')}
+            </p>
+          )}
+          {tramite.ultima_nota && !tramite.finalizado && (
+            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', margin: '0 0 10px', fontStyle: 'italic' }}>"{tramite.ultima_nota}"</p>
+          )}
+          {!tramite.finalizado && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.06)', padding: '5px 10px', borderRadius: 20, width: 'fit-content' }}>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: responsableColor(tramite.pelota) }} />
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Responsable: {responsableLabel(tramite.pelota)}</span>
             </div>
           )}
+        </div>
 
-          <div>
-            <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Nota</label>
-            <textarea value={nuevaNota} onChange={e => setNuevaNota(e.target.value)} placeholder="Ej: Catastro mandó correcciones del plano..." style={{ minHeight: 56, resize: 'vertical' }} />
+        {/* DATOS DEL EXPEDIENTE */}
+        <div style={{ background: DARK2, borderRadius: 14, border: `1.5px solid ${BORDER}`, padding: 14 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.35)', letterSpacing: 1, textTransform: 'uppercase', margin: 0 }}>Datos del expediente</p>
+            {!tramite.finalizado && (
+              <button onClick={() => setEditandoDatos(!editandoDatos)} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 20, border: `1.5px solid ${BORDER}`, background: 'transparent', color: 'rgba(255,255,255,0.4)' }}>
+                {editandoDatos ? 'Cancelar' : 'Editar'}
+              </button>
+            )}
+          </div>
+          {editandoDatos && !tramite.finalizado ? (
+            <div style={{ display: 'grid', gap: 10 }}>
+              <div>
+                <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Domicilio de obra</label>
+                <input value={editN.domicilio} onChange={e => setEditN(n => ({ ...n, domicilio: e.target.value }))} placeholder="Ej: Rivadavia 1234" />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Celular</label>
+                <input value={editN.celular} onChange={e => setEditN(n => ({ ...n, celular: e.target.value }))} placeholder="Ej: 1155556666" />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Firma</label>
+                <input value={editN.firma} onChange={e => setEditN(n => ({ ...n, firma: e.target.value }))} placeholder="Ej: A confirmar" />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Dibujante asignado</label>
+                <select value={editN.dibujante} onChange={e => setEditN(n => ({ ...n, dibujante: e.target.value }))}>
+                  <option value="">Sin asignar</option>
+                  {DIBUJANTES.map(d => <option key={d}>{d}</option>)}
+                  <option value="otro">+ Escribir nombre...</option>
+                </select>
+                {editN.dibujante === 'otro' && (
+                  <input value={dibujante_custom} onChange={e => setDibujanteCustom(e.target.value)} placeholder="Nombre del dibujante" style={{ marginTop: 6 }} />
+                )}
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Número de parcelaria (Catastro)</label>
+                <input value={editN.parcelaria} onChange={e => setEditN(n => ({ ...n, parcelaria: e.target.value }))} placeholder="Ej: 310" />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Número de expediente (Obras Part.)</label>
+                <input value={editN.expediente} onChange={e => setEditN(n => ({ ...n, expediente: e.target.value }))} placeholder="Ej: 153/2026" />
+              </div>
+              <button onClick={guardarNumerosYDibujante} disabled={saving} style={{ padding: 10, fontSize: 13, fontWeight: 600, background: TEAL, color: '#1a2332', border: 'none', borderRadius: 10 }}>
+                {saving ? 'Guardando...' : 'Guardar datos'}
+              </button>
+            </div>
+          ) : (
+            <div>
+              <Fila label="Domicilio" value={tramite.domicilio || '—'} />
+              <Fila label="Celular" value={tramite.celular || '—'} />
+              <Fila label="Dibujante" value={tramite.dibujante || '—'} />
+              {tramite.costo_dibujo > 0 && <Fila label="Costo dibujo" value={`USD ${tramite.costo_dibujo}`} />}
+              {tramite.fecha_entrega_dibujo && <Fila label="Entrega estimada" value={new Date(tramite.fecha_entrega_dibujo).toLocaleDateString('es-AR')} />}
+              <Fila label="Parcelaria" value={tramite.n_parcelaria || '—'} />
+              <Fila label="Exp. municipal" value={tramite.n_expediente || '—'} />
+              <Fila label="Firma" value={tramite.firma || '—'} />
+            </div>
+          )}
+        </div>
+
+        {/* TAREAS FINALES */}
+        <div style={{ background: DARK2, borderRadius: 14, border: `1.5px solid ${tareasCompletadas === TAREAS_FINALES.length ? 'rgba(74,222,128,0.3)' : BORDER}`, padding: 14 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.35)', letterSpacing: 1, textTransform: 'uppercase', margin: 0 }}>Tareas finales</p>
+            <span style={{ fontSize: 11, color: tareasCompletadas === TAREAS_FINALES.length ? '#4ade80' : 'rgba(255,255,255,0.35)' }}>
+              {tareasCompletadas}/{TAREAS_FINALES.length}
+            </span>
+          </div>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {TAREAS_FINALES.map(item => {
+              const checked = tramite.checklist?.[item.key] || false
+              return (
+                <button key={item.key} onClick={() => !tramite.finalizado && toggleChecklist(item.key)} style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  background: checked ? 'rgba(74,222,128,0.08)' : 'rgba(255,255,255,0.03)',
+                  border: `1.5px solid ${checked ? 'rgba(74,222,128,0.3)' : BORDER}`,
+                  borderRadius: 10, padding: '10px 14px', textAlign: 'left', width: '100%',
+                  cursor: tramite.finalizado ? 'default' : 'pointer'
+                }}>
+                  <div style={{
+                    width: 20, height: 20, borderRadius: 6, flexShrink: 0,
+                    background: checked ? '#4ade80' : 'transparent',
+                    border: `2px solid ${checked ? '#4ade80' : 'rgba(255,255,255,0.2)'}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                  }}>
+                    {checked && <span style={{ fontSize: 12, color: '#1a2332', fontWeight: 700 }}>✓</span>}
+                  </div>
+                  <span style={{ fontSize: 14, color: checked ? '#4ade80' : 'rgba(255,255,255,0.7)', fontWeight: checked ? 600 : 400, textDecoration: checked ? 'line-through' : 'none' }}>
+                    {item.label}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* REGISTRAR MOVIMIENTO — solo si no está finalizado */}
+        {!tramite.finalizado && (
+          <div style={{ background: DARK2, borderRadius: 14, border: `1.5px solid ${BORDER}`, padding: 14 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.35)', letterSpacing: 1, textTransform: 'uppercase', margin: '0 0 12px' }}>Registrar movimiento</p>
+            <div style={{ display: 'grid', gap: 10 }}>
+              <div>
+                <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 6 }}>Responsable</label>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {RESPONSABLES.map(r => (
+                    <button key={r.key} onClick={() => { setNuevoResponsable(r.key); setNuevoSubestado('') }} style={{
+                      fontSize: 11, padding: '5px 11px', borderRadius: 20,
+                      border: `1.5px solid ${nuevoResponsable === r.key ? 'rgba(45,212,176,0.4)' : BORDER}`,
+                      background: nuevoResponsable === r.key ? 'rgba(45,212,176,0.15)' : 'transparent',
+                      color: nuevoResponsable === r.key ? TEAL : 'rgba(255,255,255,0.5)'
+                    }}>{r.label}</button>
+                  ))}
+                </div>
+              </div>
+
+              {subestadosActuales.length > 0 && (
+                <div>
+                  <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 6 }}>Subestado</label>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {subestadosActuales.map(s => (
+                      <button key={s.key} onClick={() => setNuevoSubestado(s.key)} style={{
+                        fontSize: 11, padding: '5px 11px', borderRadius: 20,
+                        border: `1.5px solid ${nuevoSubestado === s.key ? 'rgba(45,212,176,0.4)' : BORDER}`,
+                        background: nuevoSubestado === s.key ? 'rgba(45,212,176,0.15)' : 'transparent',
+                        color: nuevoSubestado === s.key ? TEAL : 'rgba(255,255,255,0.5)'
+                      }}>{s.label}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Nota</label>
+                <textarea value={nuevaNota} onChange={e => setNuevaNota(e.target.value)} placeholder="Ej: Catastro mandó correcciones del plano..." style={{ minHeight: 56, resize: 'vertical' }} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>🔗 Link Dropbox / Drive (opcional)</label>
+                <input value={nuevoLink} onChange={e => setNuevoLink(e.target.value)} placeholder="https://www.dropbox.com/..." />
+              </div>
+
+              {!nuevaNota && !responsableSinCambios && (
+                <p style={{ fontSize: 12, color: '#fbbf24', margin: 0 }}>
+                  ⚠ Escribí una nota para poder registrar el cambio de responsable.
+                </p>
+              )}
+              {responsableSinCambios && (
+                <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', margin: 0 }}>
+                  Sigue en {responsableLabel(nuevoResponsable)} — tocá otro responsable arriba si te olvidaste de cambiarlo.
+                </p>
+              )}
+
+              <button onClick={registrarMovimiento} disabled={saving || !nuevaNota} style={{
+                padding: 10, fontSize: 14, fontWeight: 600,
+                background: TEAL, color: '#1a2332', border: 'none', borderRadius: 10,
+                opacity: !nuevaNota ? 0.5 : 1
+              }}>{saving ? 'Guardando...' : 'Registrar'}</button>
+            </div>
+          </div>
+        )}
+
+        {/* BOTONES DE ESTADO — Pausar/Reactivar y Finalizar/Reabrir, cada uno independiente */}
+        <div style={{ display: 'grid', gap: 8 }}>
+          {!tramite.finalizado && !enPausa && (
+            <button onClick={pausarTramite} disabled={saving} style={{
+              padding: 12, fontSize: 14, fontWeight: 600,
+              background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.4)',
+              border: `1.5px solid ${BORDER}`, borderRadius: 14
+            }}>⏸ Pausar trámite</button>
+          )}
+
+          {!tramite.finalizado && enPausa && (
+            <button onClick={reactivarTramite} disabled={saving} style={{
+              padding: 12, fontSize: 14, fontWeight: 600,
+              background: 'rgba(251,191,36,0.12)', color: '#fbbf24',
+              border: '1.5px solid rgba(251,191,36,0.3)', borderRadius: 14
+            }}>▶ Reactivar trámite</button>
+          )}
+
+          {!tramite.finalizado ? (
+            <button onClick={() => setShowConfirmFinalizar(true)} style={{
+              padding: 12, fontSize: 14, fontWeight: 600,
+              background: 'rgba(74,222,128,0.12)', color: '#4ade80',
+              border: '1.5px solid rgba(74,222,128,0.3)', borderRadius: 14
+            }}>✅ Marcar como finalizado</button>
+          ) : (
+            <button onClick={reabrirTramite} disabled={saving} style={{
+              padding: 10, fontSize: 13,
+              background: 'transparent', color: 'rgba(255,255,255,0.3)',
+              border: `1.5px solid ${BORDER}`, borderRadius: 14
+            }}>Reabrir trámite</button>
+          )}
+        </div>
+
+        {/* HISTORIAL */}
+        <div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            <button onClick={() => setHistorialAbierto(!historialAbierto)} style={{
+              flex: 1, background: DARK2, borderRadius: 14, border: `1.5px solid ${BORDER}`,
+              padding: 14, textAlign: 'left'
+            }}>
+              <p style={{ fontSize: 12, fontWeight: 600, margin: 0, color: 'rgba(255,255,255,0.5)' }}>
+                Historial ({movimientos.length}) {historialAbierto ? '↑' : '↓'}
+              </p>
+            </button>
+            {movimientos.length > 0 && (
+              <button onClick={generarReporteWord} style={{
+                flexShrink: 0, background: 'rgba(45,212,176,0.1)', borderRadius: 14, border: '1.5px solid rgba(45,212,176,0.3)',
+                padding: '14px 16px', color: TEAL, fontSize: 12, fontWeight: 600
+              }}>📄 Reporte</button>
+            )}
           </div>
 
-          <div>
-            <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>🔗 Link Dropbox / Drive (opcional)</label>
-            <input value={nuevoLink} onChange={e => setNuevoLink(e.target.value)} placeholder="https://www.dropbox.com/..." />
-          </div>
-
-          <button onClick={registrarMovimiento} disabled={saving || !nuevaNota} style={{
-            padding: 10, fontSize: 14, fontWeight: 600,
-            background: TEAL, color: '#1a2332', border: 'none', borderRadius: 10,
-            opacity: !nuevaNota ? 0.5 : 1
-          }}>{saving ? 'Guardando...' : 'Registrar'}</button>
+          {historialAbierto && (
+            <div style={{ display: 'grid', gap: 8 }}>
+              {movimientos.map(m => (
+                <div key={m.id} style={{ background: DARK2, borderRadius: 12, border: `1.5px solid ${BORDER}`, padding: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: TEAL }}>{estadoLabel(m.estado)}</span>
+                    <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>{new Date(m.created_at).toLocaleDateString('es-AR')}</span>
+                  </div>
+                  {m.nota && <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', margin: '0 0 6px' }}>{m.nota}</p>}
+                  {m.link && (
+                    <a href={m.link} target="_blank" rel="noreferrer" style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      fontSize: 11, color: TEAL, textDecoration: 'none',
+                      background: 'rgba(45,212,176,0.1)', padding: '4px 10px', borderRadius: 20, marginBottom: 6
+                    }}>🔗 Ver archivo</a>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: responsableColor(m.pelota) }} />
+                    <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>{responsableLabel(m.pelota)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* HISTORIAL */}
-      <div style={{ width: '100%', maxWidth: 480 }}>
-        <button onClick={() => setHistorialAbierto(!historialAbierto)} style={{
-          width: '100%', background: DARK2, borderRadius: 14, border: `1.5px solid ${BORDER}`,
-          padding: 14, textAlign: 'left', marginBottom: 8
-        }}>
-          <p style={{ fontSize: 12, fontWeight: 600, margin: 0, color: 'rgba(255,255,255,0.5)' }}>
-            Historial ({movimientos.length}) {historialAbierto ? '↑' : '↓'}
-          </p>
-        </button>
-
-        {historialAbierto && (
-          <div style={{ display: 'grid', gap: 8 }}>
-            {movimientos.map(m => (
-              <div key={m.id} style={{ background: DARK2, borderRadius: 12, border: `1.5px solid ${BORDER}`, padding: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: TEAL }}>{estadoLabel(m.estado)}</span>
-                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>{new Date(m.created_at).toLocaleDateString('es-AR')}</span>
-                </div>
-                {m.nota && <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', margin: '0 0 6px' }}>{m.nota}</p>}
-                {m.link && (
-                  <a href={m.link} target="_blank" rel="noreferrer" style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                    fontSize: 11, color: TEAL, textDecoration: 'none',
-                    background: 'rgba(45,212,176,0.1)', padding: '4px 10px', borderRadius: 20, marginBottom: 6
-                  }}>🔗 Ver archivo</a>
-                )}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: responsableColor(m.pelota) }} />
-                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>{responsableLabel(m.pelota)}</span>
-                </div>
-              </div>
-            ))}
+      {/* MODAL CONFIRMAR FINALIZAR */}
+      {showConfirmFinalizar && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, zIndex: 100 }}>
+          <div style={{ background: '#1a2332', borderRadius: 18, padding: 24, width: '100%', maxWidth: 360, border: `1.5px solid ${BORDER}` }}>
+            <p style={{ fontSize: 15, fontWeight: 600, margin: '0 0 8px', color: '#fff' }}>¿Finalizar trámite?</p>
+            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', margin: '0 0 20px' }}>
+              El trámite quedará cerrado. Podés reabrirlo si es necesario.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <button onClick={() => setShowConfirmFinalizar(false)} style={{ padding: 10, fontSize: 13, color: 'rgba(255,255,255,0.5)', background: 'transparent', border: `1.5px solid ${BORDER}`, borderRadius: 10 }}>Cancelar</button>
+              <button onClick={finalizarTramite} disabled={saving} style={{ padding: 10, fontSize: 13, fontWeight: 600, background: '#4ade80', color: '#1a2332', border: 'none', borderRadius: 10 }}>
+                {saving ? '...' : 'Finalizar ✅'}
+              </button>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }
