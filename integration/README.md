@@ -44,3 +44,15 @@ Referencias: [Supabase programado](https://supabase.com/docs/guides/functions/sc
 La migración `municipal_integration_queue_disabled` se aplicó al proyecto existente. Se creó el control desactivado, el remitente conocido y la exclusión del piloto terminado. Los ID y la cuenta permanecen en la base privada. Se verificó que `anon` y `authenticated` no tienen acceso a las cinco tablas nuevas. No se desplegó la función ni se creó cron.
 
 El asesor informa RLS sin políticas en estas cinco tablas: es deliberado, porque no se autoriza acceso desde clientes. También mantiene el aviso previo de [search_path mutable en asignar_numero_p](https://supabase.com/docs/guides/database/database-linter?lint=0011_function_search_path_mutable), ajeno a las nuevas funciones, que fijan un search_path vacío.
+
+## Receptor OAuth de Google
+
+Se agregó `municipal-google-oauth`, desplegado sin activar el trabajador. La ruta base es el callback; `/start` comienza el consentimiento para la cuenta fija de `integration_control`. Configurar exactamente la URL base de esta función en las URI de redireccionamiento del cliente web de Google. No se requieren orígenes JavaScript.
+
+Secretos del servidor requeridos: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` y `OAUTH_TOKEN_ENCRYPTION_KEY` (32 bytes aleatorios expresados como 64 caracteres hexadecimales). No subir el JSON de Google ni estos valores al repositorio. La función devuelve 503 mientras falta configuración; no genera enlaces de autorización incompletos.
+
+El inicio utiliza estado aleatorio, cookie Secure/HttpOnly/SameSite=Lax, expiración de diez minutos y PKCE S256. El callback consume la sesión una sola vez y verifica con Gmail que la cuenta autorizada es la configurada. Guarda únicamente el refresh token cifrado con AES-GCM y un IV nuevo por escritura. El navegador recibe un mensaje sin tokens. Las tablas de sesiones y credenciales tienen RLS y acceso exclusivamente del servidor.
+
+El trabajador puede recuperar y descifrar esa credencial si no está configurado el antiguo `GOOGLE_REFRESH_TOKEN`. Al rotar la clave de cifrado, hay que reconectar Google antes de reactivar. No cambiar la clave sin planificar esa reconexión.
+
+Verificación: `node --test integration/core.test.mjs integration/worker.test.mjs integration/google-oauth.test.mjs` (18 pruebas). Incluye cookie incorrecta, repetición, cancelación, cuenta incorrecta, cifrado alterado y ausencia de secretos en la respuesta. Falta la prueba real con las credenciales de la usuaria y la configuración de Google fuera del modo de prueba para uso permanente.

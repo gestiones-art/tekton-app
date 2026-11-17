@@ -1,4 +1,5 @@
 import { senderAddress, resolveMapping, attachments, decodeBase64, archiveAttachment, retryDelay } from './core.mjs';
+import { decryptToken } from './oauth-crypto.mjs';
 
 // No provider response bodies or credentials are included in logs/errors.
 async function request(url, options = {}) {
@@ -20,6 +21,7 @@ export function createDatabase(url, key) {
   return {
     get: path => call(path),
     patch: (table, filter, value) => call(`${table}?${filter}`, 'PATCH', value),
+    remove: (table, filter) => call(`${table}?${filter}`, 'DELETE'),
     upsert: (table, value, conflict, ignore = false) => call(`${table}?on_conflict=${conflict}`, 'POST', value, {
       Prefer: `resolution=${ignore ? 'ignore' : 'merge'}-duplicates,return=minimal`
     }),
@@ -27,9 +29,16 @@ export function createDatabase(url, key) {
   };
 }
 
-async function refreshToken(provider, env) {
+async function refreshToken(provider, env, db) {
   const google = provider === 'GOOGLE';
-  const values = { grant_type: 'refresh_token', refresh_token: env(`${provider}_REFRESH_TOKEN`),
+  let refresh = env(`${provider}_REFRESH_TOKEN`, false);
+  if (google && !refresh) {
+    const [stored] = await db.get('integration_credentials?provider=eq.google&select=encrypted_token');
+    if (!stored) throw new Error('missing_google_connection');
+    refresh = await decryptToken(stored.encrypted_token, env('OAUTH_TOKEN_ENCRYPTION_KEY'));
+  }
+  if (!refresh) throw new Error('missing_refresh_token');
+  const values = { grant_type: 'refresh_token', refresh_token: refresh,
     client_id: env(`${provider}_CLIENT_ID`), client_secret: env(`${provider}_CLIENT_SECRET`) };
   const result = await request(google ? 'https://oauth2.googleapis.com/token' : 'https://api.dropboxapi.com/oauth2/token', {
     method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(values).toString()
@@ -44,7 +53,7 @@ export async function runWorker({ db, env, now = () => new Date(), budgetMs = 50
   const controlFilter = `id=eq.true&lease_owner=eq.${owner}`;
   try {
     const [control] = await db.get('integration_control?id=eq.true');
-    const token = await refreshToken('GOOGLE', env);
+    const token = await refreshToken('GOOGLE', env, db);
     const gmail = path => request(`https://gmail.googleapis.com/gmail/v1/users/me/${path}`, { headers: { Authorization: `Bearer ${token}` } });
     const profile = await gmail('profile');
     if (profile.emailAddress.toLowerCase() !== control.mailbox.toLowerCase()) throw new Error('wrong_google_account');
@@ -96,7 +105,7 @@ export async function runWorker({ db, env, now = () => new Date(), budgetMs = 50
           await db.patch('integration_messages', filter, { status: 'review', reason: 'no_attachments' }); continue;
         }
         if (!dropbox) {
-          const dbToken = await refreshToken('DROPBOX', env);
+          const dbToken = await refreshToken('DROPBOX', env, db);
           const headers = { Authorization: `Bearer ${dbToken}`, 'Content-Type': 'application/json' };
           const root = env('DROPBOX_ROOT_NAMESPACE_ID', false);
           if (root) headers['Dropbox-API-Path-Root'] = JSON.stringify({ '.tag': 'root', root });

@@ -97,8 +97,8 @@ test('ciclo completo simulado: archiva, registra, reejecuta sin duplicar y omite
     throw Error('unexpected_request');
   };
   try {
-    assert.equal((await runWorker({ db, env: (name, required) => required === false ? '' : 'test' })).done, 1, JSON.stringify([...messages.values()]));
-    assert.equal((await runWorker({ db, env: (name, required) => required === false ? '' : 'test' })).done, 0);
+    assert.equal((await runWorker({ db, env: (name, required) => name.endsWith('_REFRESH_TOKEN') || required !== false ? 'test' : '' })).done, 1, JSON.stringify([...messages.values()]));
+    assert.equal((await runWorker({ db, env: (name, required) => name.endsWith('_REFRESH_TOKEN') || required !== false ? 'test' : '' })).done, 0);
     assert.equal(uploads, 1); assert.equal(movements, 1); assert.equal(pilotReads, 0); assert.equal(documents.length, 1);
     assert.equal(messages.get('completed_pilot').status, 'done');
   } finally { globalThis.fetch = original; }
